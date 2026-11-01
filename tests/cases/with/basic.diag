@@ -1,0 +1,2 @@
+12:3: warning: `with Form1, Edit1` makes each name inside it ambiguous: give each object a local name and write it [with]
+14:3: warning: `with Form1` makes each name inside it ambiguous: give each object a local name and write it [with]
