@@ -11,11 +11,12 @@ against the same tests in [`tests\cases\`](tests/cases/). Over Delphi 13's `sour
 the two give the same messages, line for line, and the same files, byte for byte. Use either,
 or both.
 
-**New to it? Start with the hand-held walkthrough:
-[Building the WITH Rule](https://claude.ai/artifact/BKj5CUoyiY6SmPsJ5ahf4J)**, an illustrated
+## New to it? 
+Start with the hand-held walkthrough:
+[Building the WITH Rule](https://claude.ai/artifact/BKj5CUoyiY6SmPsJ5ahf4J), an illustrated
 owner's manual in 15 pages. It builds the Delphi `with` rule step by step, from a sample file and
-its tree to a tested rule, then runs it over Delphi's own RTL, and ends with a rule for two kinds
-of node.
+its tree - to a tested rule, then runs it over Delphi's own RTL, and finally shows a rule for two kinds
+of nodes.
 
 ## The promise
 
@@ -64,11 +65,10 @@ the grammar's DLL directly.
   `Assert(Count > 0)` becomes `Assert(Count > 0, 'Orders.pas:41: Count > 0')`, so a failed
   assertion says where and what. One with a message already, and a method that happens to be
   called `Assert`, are left alone.
-- **`with-try`** (`python\delphipp\rules\with_and_try.py`), a check of two kinds of node:
+- **`with-try`** (`python\delphipp\rules\with_and_try.py`), a check of two kinds of nodes:
   how one rule handles more than one. `Visit` asks the node's kind and hands it on to a
   procedure for each: `with`, as above, and `try`, where an empty `except` (which swallows
-  every exception) or an empty `finally` is reported. Run with `with`, the two report each
-  `with` twice: choose one.
+  every exception) or an empty `finally` is reported. 
 
 Over Delphi 13's `source\rtl\common` (105 files, the grammar can't parse 8):
 
