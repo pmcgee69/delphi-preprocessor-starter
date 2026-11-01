@@ -391,14 +391,26 @@ begin
         Output := Copy(Output, 0, Edits[I].StartByte) + Edits[I].Bytes +
                   Copy(Output, Edits[I].EndByte, Length(Output) - Edits[I].EndByte);
 
-    Result := Ctx.FMessages.ToArray;
-    TArray.Sort<TMessage>(Result, TComparer<TMessage>.Construct(
-      function(const A, B: TMessage): Integer
+    // by line and column; two at one place in the order they were reported, as
+    // Python's sort keeps them (TArray.Sort alone may swap them): so the indexes
+    // are sorted, with the index last
+    var All := Ctx.FMessages.ToArray;
+    var Order: TArray<Integer>;
+    SetLength(Order, Length(All));
+    for var I := 0 to High(Order) do
+      Order[I] := I;
+    TArray.Sort<Integer>(Order, TComparer<Integer>.Construct(
+      function(const A, B: Integer): Integer
       begin
-        Result := A.Line - B.Line;
+        Result := All[A].Line - All[B].Line;
         if Result = 0 then
-          Result := A.Col - B.Col;
+          Result := All[A].Col - All[B].Col;
+        if Result = 0 then
+          Result := A - B;
       end));
+    SetLength(Result, Length(All));
+    for var I := 0 to High(Order) do
+      Result[I] := All[Order[I]];
   finally
     Stack.Free;
     Wanted.Free;

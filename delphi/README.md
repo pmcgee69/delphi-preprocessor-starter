@@ -25,6 +25,7 @@ Everything lands in `delphi\TreeSitter4D\`, which git ignores.
 | `DelphiPP.Engine.pas` | the engine: `Run`, `TRule`, `TContext`, `TNode`, `TMessage` |
 | `DelphiPP.Rule.WithStatement.pas` | the `with` check |
 | `DelphiPP.Rule.AssertMessage.pas` | the `assert-message` rewrite |
+| `DelphiPP.Rule.WithAndTry.pas` | the `with-try` check: one rule, two Kinds, a procedure for each |
 | `DelphiPP.Rules.pas` | the list of rules: add yours here |
 | `delphipp.dpr` | the command line |
 | `RunTests.dpr` | the tests |

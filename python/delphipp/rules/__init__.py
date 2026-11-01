@@ -11,8 +11,9 @@ own in tests/cases/<name>/.
 """
 from .assert_message import AssertMessage
 from .with_statement import WithStatement
+from .with_and_try import WithAndTry
 
-ALL = [WithStatement, AssertMessage]
+ALL = [WithStatement, AssertMessage, WithAndTry]
 
 
 def by_name(names=None):

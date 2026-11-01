@@ -1,0 +1,3 @@
+12:3: warning: `with Form1` makes each name inside it ambiguous: give each object a local name and write it [with-try]
+16:3: warning: an empty `except` swallows every exception: handle it, or leave out the try [with-try]
+20:3: warning: an empty `finally` does nothing: fill it, or leave out the try [with-try]

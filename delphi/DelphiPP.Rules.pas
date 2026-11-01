@@ -27,12 +27,14 @@ implementation
 uses
   System.SysUtils,
   DelphiPP.Rule.WithStatement,
-  DelphiPP.Rule.AssertMessage;
+  DelphiPP.Rule.AssertMessage,
+  DelphiPP.Rule.WithAndTry;
 
 function AllRules: TArray<TRule>;
 begin
   Result := [TWithStatement.Create,
-             TAssertMessage.Create];
+             TAssertMessage.Create,
+             TWithAndTry.Create];
 end;
 
 function RulesNamed(const Names: string): TArray<TRule>;

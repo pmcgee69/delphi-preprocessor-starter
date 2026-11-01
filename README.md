@@ -50,7 +50,7 @@ python -m delphipp -o ..\out ..\tests\cases\assert-message\basic.pas
 checks its SHA-256, and puts them in `build\`. No C compiler is needed: py-tree-sitter loads
 the grammar's DLL directly.
 
-## The two example rules
+## The three example rules
 
 - **`with`** (`python\delphipp\rules\with_statement.py`), a check: every `with` statement,
   reported with its objects, since each name inside it could belong to any of them.
@@ -58,6 +58,11 @@ the grammar's DLL directly.
   `Assert(Count > 0)` becomes `Assert(Count > 0, 'Orders.pas:41: Count > 0')`, so a failed
   assertion says where and what. One with a message already, and a method that happens to be
   called `Assert`, are left alone.
+- **`with-try`** (`python\delphipp\rules\with_and_try.py`), a check of two kinds of node:
+  how one rule handles more than one. `Visit` asks the node's kind and hands it on to a
+  procedure for each: `with`, as above, and `try`, where an empty `except` (which swallows
+  every exception) or an empty `finally` is reported. Run with `with`, the two report each
+  `with` twice: choose one.
 
 Over Delphi 13's `source\rtl\common` (105 files, the grammar can't parse 8):
 
@@ -69,6 +74,7 @@ pass-through: 105 of 105 byte for byte the same
 python tools\survey.py "...\source\rtl\common"
 105 files; the grammar can't parse 8
 files changed: 15
+      62 messages from with-try
       55 messages from with
 ```
 
