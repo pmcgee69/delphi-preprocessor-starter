@@ -6,6 +6,7 @@ program delphipp;
     delphipp -o OUT FILE_OR_FOLDER...     also write each file, rewritten, under OUT
     delphipp --rules with ...             only the rules named (comma-separated)
     delphipp --list                       the rules there are
+    delphipp --tree FILE                  the file's tree: the kinds of node a rule can ask for
 
   Exit status 1 when a rule reports an error. }
 
@@ -13,10 +14,8 @@ program delphipp;
 
 uses
   System.SysUtils, System.IOUtils, System.Types, System.Generics.Collections,
-  DelphiPP.Engine in 'DelphiPP.Engine.pas',
-  DelphiPP.Rules in 'DelphiPP.Rules.pas',
-  DelphiPP.Rule.WithStatement in 'DelphiPP.Rule.WithStatement.pas',
-  DelphiPP.Rule.AssertMessage in 'DelphiPP.Rule.AssertMessage.pas';
+  DelphiPP.Engine,
+  DelphiPP.Rules;     // the rules: dcc finds their units here, beside this file
 
 function IsDelphi(const Path: string): Boolean;
 begin
@@ -29,6 +28,7 @@ var
   OutDir  : string;
   Names   : string;
   List    : Boolean;
+  TreeOf  : string;
 
 begin
   try
@@ -39,10 +39,16 @@ begin
       if (A = '-o') or (A = '--out') then begin Inc(I); OutDir := ParamStr(I); end
       else if A = '--rules' then begin Inc(I); Names := ParamStr(I); end
       else if A = '--list' then List := True
+      else if A = '--tree' then begin Inc(I); TreeOf := ParamStr(I); end
       else Paths := Paths + [A];
       Inc(I);
     end;
 
+    if TreeOf <> '' then
+    begin
+      Write(TreeText(TFile.ReadAllBytes(TreeOf)));
+      Exit;
+    end;
     const Rules = RulesNamed(Names);
     try
       if List then

@@ -18,10 +18,8 @@ program RunTests;
 
 uses
   System.SysUtils, System.IOUtils, System.Types, System.Generics.Collections,
-  DelphiPP.Engine in 'DelphiPP.Engine.pas',
-  DelphiPP.Rules in 'DelphiPP.Rules.pas',
-  DelphiPP.Rule.WithStatement in 'DelphiPP.Rule.WithStatement.pas',
-  DelphiPP.Rule.AssertMessage in 'DelphiPP.Rule.AssertMessage.pas';
+  DelphiPP.Engine,
+  DelphiPP.Rules;     // the rules: dcc finds their units here, beside this file
 
 function Same(const A, B: TBytes): Boolean;
 begin

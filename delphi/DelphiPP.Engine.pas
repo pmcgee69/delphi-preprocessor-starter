@@ -85,6 +85,11 @@ type
 function Run(const Source: TBytes; const Rules: TArray<TRule>; const FileName: string;
              out Output: TBytes): TArray<TMessage>;
 
+// the file's tree as text, a node a line, indented by depth: each node's Kind
+// (what a rule's Kinds lists), its line, and a leaf's text. The first step of
+// writing a rule: find the kind of node it is about (delphipp --tree FILE)
+function TreeText(const Source: TBytes): string;
+
 implementation
 
 uses
@@ -254,6 +259,54 @@ begin
         Found  := True;
         Break;
       end;
+  end;
+end;
+
+function TreeText(const Source: TBytes): string;
+type
+  TAt = record Node: TNode; Depth: Integer; end;
+begin
+  var Encoding := SourceEncoding(Source);
+  var Parser   := ts_parser_new;
+  var Stack    := TStack<TAt>.Create;
+  var Lines    := TStringBuilder.Create;
+  try
+    ts_parser_set_language(Parser, tree_sitter_delphi13);
+    var Tree := ts_parser_parse_string(Parser, nil, PByte(Source), Length(Source));
+    try
+      var At: TAt;
+      At.Node.FNode := ts_tree_root_node(Tree);
+      At.Depth      := 0;
+      Stack.Push(At);
+      while Stack.Count > 0 do
+      begin
+        At := Stack.Pop;
+        var Line := StringOfChar(' ', 2 * At.Depth) + At.Node.Kind;
+        if At.Node.ChildCount = 0 then
+          Line := Line.PadRight(40) + ' ' +
+                  Encoding.GetString(Source, At.Node.StartByte, At.Node.EndByte - At.Node.StartByte)
+                          .Replace(#13, '').Replace(#10, ' ')
+        else
+          Line := Line.PadRight(40) + ' line ' + IntToStr(At.Node.Line);
+        Lines.AppendLine(Line.TrimRight);
+        for var I := At.Node.ChildCount - 1 downto 0 do
+        begin
+          var C: TAt;
+          C.Node  := At.Node.Child(I);
+          C.Depth := At.Depth + 1;
+          Stack.Push(C);
+        end;
+      end;
+    finally
+      ts_tree_delete(Tree);
+    end;
+    Exit( Lines.ToString );
+  finally
+    Lines.Free;
+    Stack.Free;
+    ts_parser_delete(Parser);
+    if not TEncoding.IsStandardEncoding(Encoding) then
+      Encoding.Free;
   end;
 end;
 

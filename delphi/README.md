@@ -10,6 +10,7 @@ build.cmd                            rem Win64: bin\delphipp.exe, bin\RunTests.e
 build.cmd win32                      rem Win32: bin\win32\
 bin\RunTests.exe                     rem the tests, ..\tests\cases, shared with the Python side
 bin\delphipp.exe --list              rem the rules
+bin\delphipp.exe --tree FILE         rem a file's tree: the kinds of node a rule can ask for
 bin\delphipp.exe FOLDER              rem run them: messages
 bin\delphipp.exe -o OUT FOLDER       rem and the rewritten files, under OUT
 ```
@@ -37,6 +38,21 @@ line, and every rewritten file is the same byte for byte, on Win64 and Win32.
 
 ## Writing a rule in Delphi
 
+Start by reading `DelphiPP.Rule.WithStatement.pas`: its comment says how a rule works and how
+that one was made, step by step. In short:
+
+1. **Write a small sample** with the thing in it.
+2. **Look at its tree**, to find the Kind of node your rule is about:
+   `bin\delphipp.exe --tree sample.pas`. Each line is a node: its Kind, then a leaf's text or a
+   branch's line number.
+3. **Write the class**, below: `Kinds` lists that Kind, and `Visit` looks around the node and
+   reports, or proposes an edit.
+4. **Register it** in `DelphiPP.Rules.pas`: its unit in the uses, its class in `AllRules`. That's
+   the only place.
+5. **Build, run, test**: `build.cmd`; `bin\delphipp.exe --rules yourname sample.pas`; put the sample
+   in `..\tests\cases\yourname\`, run `bin\RunTests.exe --update` to write what the rule does now,
+   read it, and keep it.
+
 ```pascal
 type
   TWithStatement = class(TRule)
@@ -54,8 +70,6 @@ begin
 end;
 ```
 
-`Node.Kind`, `Node.Child(I)`, `Node.ChildCount`, `Node.Field('args')` and `Ctx.Text(Node)` take
-you around the tree; the node types are the grammar's, as the main README shows how to print.
-Add the rule's unit to `DelphiPP.Rules.pas` and to the two `.dpr` files' uses, give it a test
-folder in `..\tests\cases\<name>\`, and `RunTests.exe --update` writes its expected files (or the
-Python side's `run.py --update`, when it has the rule too).
+`Node.Kind`, `Node.Child(I)`, `Node.ChildCount`, `Node.Line` and `Ctx.Text(Node)` take you around
+the tree, and `--tree` shows what's there. A rule in both languages shares its test folder: either
+side's `--update` writes the expected files, and both must pass them.

@@ -1,10 +1,15 @@
 unit DelphiPP.Rules;
 
-{ The rules there are. A rule is a class of DelphiPP.Engine's TRule: its Name
-  (how it is chosen, and named in its messages), the Kinds of node it wants,
-  and Visit, called for each such node in source order. Add yours here, each in
-  a unit of its own, with a test folder in ..\tests\cases\<name>\, shared with
-  the Python side. }
+{ THE LIST OF RULES: the one place a new rule is registered.
+
+  To add a rule:
+    1. write its unit, a class of TRule (see DelphiPP.Rule.WithStatement.pas,
+       which says how one is made, step by step);
+    2. add the unit to the uses below, and the class to AllRules;
+    3. build.cmd. delphipp.exe and RunTests.exe both find it from here.
+
+  Give it a test folder too, tests\cases\<its Name>\, shared with the Python
+  side. }
 
 interface
 
@@ -20,11 +25,14 @@ function RulesNamed(const Names: string): TArray<TRule>;
 implementation
 
 uses
-  System.SysUtils, DelphiPP.Rule.WithStatement, DelphiPP.Rule.AssertMessage;
+  System.SysUtils,
+  DelphiPP.Rule.WithStatement,
+  DelphiPP.Rule.AssertMessage;
 
 function AllRules: TArray<TRule>;
 begin
-  Result := [TWithStatement.Create, TAssertMessage.Create];
+  Result := [TWithStatement.Create,
+             TAssertMessage.Create];
 end;
 
 function RulesNamed(const Names: string): TArray<TRule>;
