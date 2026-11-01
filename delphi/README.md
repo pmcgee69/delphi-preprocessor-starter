@@ -39,8 +39,10 @@ line, and every rewritten file is the same byte for byte, on Win64 and Win32.
 
 ## Writing a rule in Delphi
 
-Start by reading `DelphiPP.Rule.WithStatement.pas`: its comment says how a rule works and how
-that one was made, step by step. In short:
+The hand-held walkthrough is
+[Building the WITH Rule](https://claude.ai/artifact/BKj5CUoyiY6SmPsJ5ahf4J): this rule, built
+step by step, in 15 illustrated pages. Then read `DelphiPP.Rule.WithStatement.pas`: its comment
+says how a rule works and how that one was made, step by step. In short:
 
 1. **Write a small sample** with the thing in it.
 2. **Look at its tree**, to find the Kind of node your rule is about:

@@ -11,6 +11,12 @@ against the same tests in [`tests\cases\`](tests/cases/). Over Delphi 13's `sour
 the two give the same messages, line for line, and the same files, byte for byte. Use either,
 or both.
 
+**New to it? Start with the hand-held walkthrough:
+[Building the WITH Rule](https://claude.ai/artifact/BKj5CUoyiY6SmPsJ5ahf4J)**, an illustrated
+owner's manual in 15 pages. It builds the Delphi `with` rule step by step, from a sample file and
+its tree to a tested rule, then runs it over Delphi's own RTL, and ends with a rule for two kinds
+of node.
+
 ## The promise
 
 **A file no rule changes comes out byte for byte as it went in.** Rules don't edit text: they
