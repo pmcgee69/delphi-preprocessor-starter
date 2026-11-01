@@ -24,9 +24,10 @@ Python 3.10 or later (64-bit or 32-bit), on Windows.
 pip install -r python\requirements.txt
 python tools\get-grammar.py             rem the Delphi grammar, compiled, from a TreeSitter4D release
 cd python
-python -m delphipp --list               rem the rules
-python -m delphipp ..\tests\cases       rem run them: messages
-python -m delphipp -o ..\out ..\tests\cases    rem and the rewritten files, under out\
+python -m delphipp --list                          rem the rules
+python -m delphipp ..\tests\cases\with             rem run them over a file or folder: messages
+python -m delphipp -o ..\out ..\tests\cases\assert-message\basic.pas
+                                                   rem and the rewritten files, under out\
 ```
 
 `get-grammar.py` downloads the DLLs of a [TreeSitter4D release](https://github.com/pmcgee69/TreeSitter4D/releases),

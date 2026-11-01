@@ -35,7 +35,9 @@ def main(argv=None):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     if a.list:
         for r in rules.ALL:
-            print(f"{r.name:16} {(r.__doc__ or '').strip().splitlines()[0]}")
+            # a rule's description is its file's docstring, first line
+            doc = (r.__doc__ or sys.modules[r.__module__].__doc__ or '').strip()
+            print(f"{r.name:16} {doc.splitlines()[0] if doc else ''}")
         return 0
     if not a.paths:
         ap.error('give a file or a folder')
