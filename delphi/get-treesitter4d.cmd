@@ -18,7 +18,7 @@ if exist TreeSitter4D\obj\ts_lib.o (
   goto :eof
 )
 if not exist TreeSitter4D\delphi\TreeSitter.Api.pas (
-  git clone --quiet --depth 1 --branch v%VER% https://github.com/pmcgee69/TreeSitter4D.git TreeSitter4D || exit /b 1
+  git -c advice.detachedHead=false clone --quiet --depth 1 --branch v%VER% https://github.com/pmcgee69/TreeSitter4D.git TreeSitter4D || exit /b 1
 )
 echo downloading %URL%
 curl --silent --show-error --location --fail -o TreeSitter4D\%ZIP% %URL% || exit /b 1
