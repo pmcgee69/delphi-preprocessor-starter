@@ -110,13 +110,17 @@ def run(raw: bytes, rules, filename: str = '<input>') -> tuple[bytes, list[Messa
 
 
 def _first_error(root):
-    stack = [root]
-    while stack:
-        n = stack.pop()
-        if n.is_error or n.is_missing:
+    """The error the parser found: the innermost node holding one, first in
+    the file. Down from the root, which is itself an ERROR node when the
+    grammar can't read the file's top level (as the Delphi side does it)."""
+    n = root
+    while True:
+        for c in n.children:
+            if c.has_error or c.type == 'ERROR':
+                n = c
+                break
+        else:
             return n
-        stack.extend(reversed([c for c in n.children if c.has_error or c.is_error or c.is_missing]))
-    return root
 
 
 def _apply(raw: bytes, ctx: Context) -> bytes:

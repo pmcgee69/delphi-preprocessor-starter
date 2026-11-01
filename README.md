@@ -5,8 +5,11 @@ report, and rewrites that change the source, with Delphi parsed by
 [tree-sitter](https://tree-sitter.github.io/). Write a rule in a few lines, test it against
 expected output, then run it over a whole codebase to see what it does before trusting it.
 
-Python today; a Delphi version on [TreeSitter4D](https://github.com/pmcgee69/TreeSitter4D)
-is planned in [`delphi\`](delphi/), sharing the same tests.
+In **Python** ([`python\`](python/)) and in **Delphi** ([`delphi\`](delphi/), on
+[TreeSitter4D](https://github.com/pmcgee69/TreeSitter4D)): the same engine and rules, checked
+against the same tests in [`tests\cases\`](tests/cases/). Over Delphi 13's `source\rtl\common`
+the two give the same messages, line for line, and the same files, byte for byte. Use either,
+or both.
 
 ## The promise
 
@@ -18,7 +21,20 @@ folder.
 
 ## Getting started
 
-Python 3.10 or later (64-bit or 32-bit), on Windows.
+**With Delphi alone** (Delphi 13; Win64 or Win32):
+
+```
+cd delphi
+get-treesitter4d.cmd                 rem once: TreeSitter4D's units and its compiled C
+build.cmd                            rem bin\delphipp.exe and bin\RunTests.exe
+bin\RunTests.exe                     rem the tests
+bin\delphipp.exe --list              rem the rules
+bin\delphipp.exe ..\tests\cases\with rem run them over a file or folder
+```
+
+More in [`delphi\README.md`](delphi/README.md).
+
+**With Python** 3.10 or later (64-bit or 32-bit), on Windows:
 
 ```
 pip install -r python\requirements.txt
