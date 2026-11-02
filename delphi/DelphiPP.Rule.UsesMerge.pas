@@ -1,6 +1,6 @@
 unit DelphiPP.Rule.UsesMerge;
 
-{ THE `uses-merge` RULE: a rewrite, in Delphi only. It lets a file have several
+{ THE `uses-merge` RULE: a rewrite. It lets a file have several
   uses clauses in one section, which Delphi doesn't (dcc64: E2029 at the
   second), and merges them into the one Delphi wants:
 

@@ -69,7 +69,7 @@ the grammar's DLL directly.
   how one rule handles more than one. `Visit` asks the node's kind and hands it on to a
   procedure for each: `with`, as above, and `try`, where an empty `except` (which swallows
   every exception) or an empty `finally` is reported. 
-- **`uses-merge`** (`delphi\DelphiPP.Rule.UsesMerge.pas`, in Delphi only), a rewrite: lets a
+- **`uses-merge`** (`python\delphipp\rules\uses_merge.py`), a rewrite: lets a
   section have several `uses` clauses, which Delphi doesn't, and merges them into one, so
   each need can have its own clause and comment. The standard grammar already parses them;
   no new syntax is needed:

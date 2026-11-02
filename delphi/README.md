@@ -26,7 +26,7 @@ Everything lands in `delphi\TreeSitter4D\`, which git ignores.
 | `DelphiPP.Rule.WithStatement.pas` | the `with` check |
 | `DelphiPP.Rule.AssertMessage.pas` | the `assert-message` rewrite |
 | `DelphiPP.Rule.WithAndTry.pas` | the `with-try` check: one rule, two Kinds, a procedure for each |
-| `DelphiPP.Rule.UsesMerge.pas` | the `uses-merge` rewrite, in Delphi only: several `uses` clauses in a section merged into one |
+| `DelphiPP.Rule.UsesMerge.pas` | the `uses-merge` rewrite: several `uses` clauses in a section merged into one |
 | `DelphiPP.Rules.pas` | the list of rules: add yours here |
 | `delphipp.dpr` | the command line |
 | `RunTests.dpr` | the tests |
@@ -38,8 +38,8 @@ shared tests check that: `RunTests.exe` reads the expected files the Python side
 Over Delphi 13's `source\rtl\common` (105 files) the two sides' messages are the same line for
 line, and every rewritten file is the same byte for byte, on Win64 and Win32.
 
-A rule can also be Delphi's alone, as `uses-merge` is: its tests sit in `tests\cases\` with the
-others, and the Python runner skips a folder whose rule it doesn't have, saying so.
+A rule can also be Delphi's alone: its tests sit in `tests\cases\` with the others, and the
+Python runner skips a folder whose rule it doesn't have, saying so.
 
 ## Writing a rule in Delphi
 
