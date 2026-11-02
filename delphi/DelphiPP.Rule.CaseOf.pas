@@ -45,8 +45,10 @@ unit DelphiPP.Rule.CaseOf;
   labels (a string case: its other labels, such as the constant sWorld, are
   strings too), or one whose selector ends in .ClassType (an object case). Any
   other case is ordinal, and ordinary Delphi: left alone. That includes a case
-  on a Char, whose labels are one-character literals such as 'a'; a case on a
-  string whose labels are all one character is left alone too, as nothing in
+  on a Char, whose labels are one-character literals: 'a', '''' (a quote), or
+  a character code such as #10 or #$0D. Characters are counted as Delphi reads
+  the literal, so #13#10 is two, and a case with it is a string case. A case on
+  a string whose labels are all one character is left alone too, as nothing in
   the text tells it from a Char case, and dcc reports it.
 
   THE SELECTOR is written again in each test, so it must be a name or a dotted

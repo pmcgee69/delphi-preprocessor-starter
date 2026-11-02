@@ -18,7 +18,8 @@ expressions to it, whatever their type.
 Which cases: one with a string literal of other than one character among its
 labels (a string case), or one whose selector ends in .ClassType (an object
 case). Any other case is ordinal, and Delphi's own: left alone, a case on a Char
-('a', '''') among them.
+('a', '''', #10, #$0D) among them. Characters are counted as Delphi reads the
+literal, so #13#10 is two, and a case with it is a string case.
 
 The selector is written again in each test, so it must be a name or a dotted
 name (s, Rec.Name, x.ClassType). Anything else, such as Trim(s), is reported as

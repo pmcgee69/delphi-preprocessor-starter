@@ -92,6 +92,11 @@ the grammar's DLL directly.
   else                                     x := 3
     x := 0;                              else
   end;                                     x := 0;
+
+  case x.ClassType of                    if x.ClassType = TStringList then
+    TStringList : k := 1;        ->        k := 1
+    TList       : k := 2;                else if x.ClassType = TList then
+  end;                                     k := 2;
   ```
 
 - **`auto-property`** (`python\delphipp\rules\auto_property.py`), a rewrite: a property with
