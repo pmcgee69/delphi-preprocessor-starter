@@ -1,0 +1,10 @@
+unit UsesErrors;
+
+interface
+
+uses System.SysUtils,
+  System.Classes, System.SysUtils;
+
+implementation
+
+end.

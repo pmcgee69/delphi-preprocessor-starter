@@ -28,13 +28,15 @@ uses
   System.SysUtils,
   DelphiPP.Rule.WithStatement,
   DelphiPP.Rule.AssertMessage,
-  DelphiPP.Rule.WithAndTry;
+  DelphiPP.Rule.WithAndTry,
+  DelphiPP.Rule.UsesMerge;
 
 function AllRules: TArray<TRule>;
 begin
   Result := [TWithStatement.Create,
              TAssertMessage.Create,
-             TWithAndTry.Create];
+             TWithAndTry.Create,
+             TUsesMerge.Create];
 end;
 
 function RulesNamed(const Names: string): TArray<TRule>;

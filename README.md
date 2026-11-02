@@ -57,7 +57,7 @@ python -m delphipp -o ..\out ..\tests\cases\assert-message\basic.pas
 checks its SHA-256, and puts them in `build\`. No C compiler is needed: py-tree-sitter loads
 the grammar's DLL directly.
 
-## The three example rules
+## The example rules
 
 - **`with`** (`python\delphipp\rules\with_statement.py`), a check: every `with` statement,
   reported with its objects, since each name inside it could belong to any of them.
@@ -69,6 +69,18 @@ the grammar's DLL directly.
   how one rule handles more than one. `Visit` asks the node's kind and hands it on to a
   procedure for each: `with`, as above, and `try`, where an empty `except` (which swallows
   every exception) or an empty `finally` is reported. 
+- **`uses-merge`** (`delphi\DelphiPP.Rule.UsesMerge.pas`, in Delphi only), a rewrite: lets a
+  section have several `uses` clauses, which Delphi doesn't, and merges them into one, so
+  each need can have its own clause and comment. The standard grammar already parses them;
+  no new syntax is needed:
+
+  ```pascal
+  uses System.SysUtils, System.Classes;        uses System.SysUtils, System.Classes,
+  uses System.Types;                     ->      System.Types;
+  ```
+
+  Clauses with a compiler directive between them are left alone, since they may be
+  alternatives (one per platform), as in Delphi's own RTL.
 
 Over Delphi 13's `source\rtl\common` (105 files, the grammar can't parse 8):
 

@@ -21,6 +21,9 @@ failed = total = 0
 for case in sorted((ROOT / 'tests' / 'cases').glob('*/*.pas')):
     if case.name.endswith('.out.pas'):
         continue
+    if case.parent.name not in {r.name for r in rules.ALL}:
+        print(f"skip  {case.parent.name}/{case.name}: a Delphi-only rule")
+        continue
     total += 1
     rule = rules.by_name(case.parent.name)
     raw = case.read_bytes()
