@@ -6,6 +6,12 @@
     "cwd": "$ZED_WORKTREE_ROOT/python"
   },
   {
+    "label": "Rules: compile and run this file, Win32",
+    "command": "python",
+    "args": ["-m", "delphipp.build", "$ZED_FILE", "--run", "--win32"],
+    "cwd": "$ZED_WORKTREE_ROOT/python"
+  },
+  {
     "label": "Rules: show what they change in this file",
     "command": "python",
     "args": ["-m", "delphipp.build", "$ZED_FILE", "--diff"],

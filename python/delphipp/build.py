@@ -1,9 +1,9 @@
 """Apply the rules to a file and compile the result with dcc64: does a rewrite really compile?
 
-    python -m delphipp.build FILE [--run] [--diff] [--rules with,case-of] [--out DIR]
+    python -m delphipp.build FILE [--run] [--diff] [--win32] [--rules with,case-of] [--out DIR]
 
-The rewritten file goes in a folder of its own, and yours stays as it is. dcc64's messages are put
-on your file's lines, through the edits. --diff shows what the rules changed. Exit status 1 on an
+The rewritten file goes in a folder of its own, and yours stays as it is. The compiler's messages
+are put on your file's lines, through the edits. --diff shows what the rules changed. Exit status 1 on an
 error.
 """
 from __future__ import annotations
@@ -53,6 +53,7 @@ def main(argv=None) -> int:
     ap.add_argument('--diff', action='store_true', help='show what the rules changed')
     ap.add_argument('--rules', help='the rules to run, comma-separated (default: all)')
     ap.add_argument('--out', type=pathlib.Path, help='where the output goes; keep it short')
+    ap.add_argument('--win32', action='store_true', help='compile with dcc32, not dcc64')
     a = ap.parse_args(argv)
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     raw = a.file.read_bytes()
@@ -69,10 +70,13 @@ def main(argv=None) -> int:
     if failed:
         return 1
     folder = a.out or out_folder(a.file)
+    if a.win32:
+        folder = folder / 'win32'       # its compiled units are its own
     folder.mkdir(parents=True, exist_ok=True)
     target = folder / a.file.name
     target.write_bytes(out)
-    run = subprocess.run(['dcc64', '-Q', f'-E{folder}', f'-NU{folder}', '-NSSystem;Winapi',
+    compiler = 'dcc32' if a.win32 else 'dcc64'
+    run = subprocess.run([compiler, '-Q', f'-E{folder}', f'-NU{folder}', '-NSSystem;Winapi',
                           f'-U{a.file.resolve().parent}', f'-I{a.file.resolve().parent}', str(target)],
                          capture_output=True, text=True, errors='replace', timeout=600)
     for text in run.stdout.splitlines():
@@ -87,10 +91,11 @@ def main(argv=None) -> int:
         else:
             print(f"{where}({line}) {level}: {message}")
     if run.returncode != 0:
-        print('dcc64 refused it', file=sys.stderr)
+        print(f'{compiler} refused it', file=sys.stderr)
         return 1
     print(f'compiled: {target}')
     if a.run and a.file.suffix.lower() == '.dpr':
+        sys.stdout.flush()      # ours first, then the program's
         return subprocess.run([str(folder / (a.file.stem + '.exe'))], stdin=subprocess.DEVNULL).returncode
     return 0
 

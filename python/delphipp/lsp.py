@@ -139,9 +139,12 @@ class Server:
             try:
                 # the path, not the uri: assert-message writes the file's name into the code
                 found, actions = analyse(text.replace('\r\n', '\n'), path_of(uri))
-            except Exception as e:      # a rule being written may well fail: the editor stays up
-                self.send({'method': 'window/logMessage', 'params': {
-                    'type': 1, 'message': f'the rules failed on {uri}: {type(e).__name__}: {e}'}})
+            # a rule being written may well fail, and the grammar may not be downloaded yet (a
+            # SystemExit, which would end this thread in silence): the editor hears why
+            except (Exception, SystemExit) as e:
+                text = f'the rules failed on {uri}: {type(e).__name__}: {e}'
+                self.send({'method': 'window/showMessage', 'params': {'type': 1, 'message': text}})
+                self.send({'method': 'window/logMessage', 'params': {'type': 1, 'message': text}})
                 continue
             with self.changed:
                 stale = uri in self.pending
