@@ -29,14 +29,18 @@ uses
   DelphiPP.Rule.WithStatement,
   DelphiPP.Rule.AssertMessage,
   DelphiPP.Rule.WithAndTry,
-  DelphiPP.Rule.UsesMerge;
+  DelphiPP.Rule.UsesMerge,
+  DelphiPP.Rule.CaseOf,
+  DelphiPP.Rule.AutoProperty;
 
 function AllRules: TArray<TRule>;
 begin
   Result := [TWithStatement.Create,
              TAssertMessage.Create,
              TWithAndTry.Create,
-             TUsesMerge.Create];
+             TUsesMerge.Create,
+             TCaseOf.Create,
+             TAutoProperty.Create];
 end;
 
 function RulesNamed(const Names: string): TArray<TRule>;

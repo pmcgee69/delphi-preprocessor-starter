@@ -1,0 +1,1 @@
+7:5: error: a property with no read or write before any visibility: write public or published before it [auto-property]

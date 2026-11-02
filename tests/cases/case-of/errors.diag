@@ -1,0 +1,2 @@
+14:8: error: the selector would be evaluated once for each test: put it in a variable, then case on that [case-of]
+19:5: error: a range label in a case on strings or class types: write it as an if [case-of]

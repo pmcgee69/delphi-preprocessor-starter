@@ -81,6 +81,35 @@ the grammar's DLL directly.
 
   Clauses with a compiler directive between them are left alone, since they may be
   alternatives (one per platform), as in Delphi's own RTL.
+- **`case-of`** (`python\delphipp\rules\case_of.py`), a rewrite: `case` on strings, and on
+  class types, written as the `if` chain Delphi compiles. A case on a `Char`, or any other
+  ordinal, is left alone:
+
+  ```pascal
+  case s of                              if (s = 'hello') or (s = 'hi') then
+    'hello', 'hi' : x := 1;                x := 1
+    sWorld        : x := 3;      ->      else if s = sWorld then
+  else                                     x := 3
+    x := 0;                              else
+  end;                                     x := 0;
+  ```
+
+- **`auto-property`** (`python\delphipp\rules\auto_property.py`), a rewrite: a property with
+  no field and no `read` or `write` gains all three:
+
+  ```pascal
+  TPerson = class                        TPerson = class
+  public                                 private
+    property Name: string;      ->         FName: string;
+  end;                                   public
+                                           property Name: string read FName write FName;
+                                         end;
+  ```
+
+`uses-merge`, `case-of` and `auto-property` come from Vincent Parrett's
+[*Delphi language enhancements*](https://www.finalbuilder.com/resources/blogs/delphi-language-enhancements)
+(2016): features Delphi lacks whose syntax the standard grammar already parses, so a rewrite
+can supply them.
 
 Over Delphi 13's `source\rtl\common` (105 files, the grammar can't parse 8):
 

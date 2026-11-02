@@ -27,6 +27,8 @@ Everything lands in `delphi\TreeSitter4D\`, which git ignores.
 | `DelphiPP.Rule.AssertMessage.pas` | the `assert-message` rewrite |
 | `DelphiPP.Rule.WithAndTry.pas` | the `with-try` check: one rule, two Kinds, a procedure for each |
 | `DelphiPP.Rule.UsesMerge.pas` | the `uses-merge` rewrite: several `uses` clauses in a section merged into one |
+| `DelphiPP.Rule.CaseOf.pas` | the `case-of` rewrite: `case` on strings or class types, as an `if` chain |
+| `DelphiPP.Rule.AutoProperty.pas` | the `auto-property` rewrite: a property with no `read` or `write` gains a field and both |
 | `DelphiPP.Rules.pas` | the list of rules: add yours here |
 | `delphipp.dpr` | the command line |
 | `RunTests.dpr` | the tests |
