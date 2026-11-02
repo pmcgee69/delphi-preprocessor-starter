@@ -201,7 +201,9 @@ begin
   begin
     const C = Node.Child(I);
     if C.Kind = 'comment' then
-      Code := Code + Ctx.Text(C) + LineBreak + Indent
+      // a // comment's node holds the CR of a CRLF file: left in, it makes a CR CR LF, and
+      // dcc counts the lone CR as a line, so its messages' line numbers drift
+      Code := Code + Ctx.Text(C).TrimRight([#13]) + LineBreak + Indent
     else if C.Kind = 'caseCase' then
     begin
       // the tests: one for each label, joined by `or`

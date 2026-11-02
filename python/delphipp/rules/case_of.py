@@ -99,7 +99,9 @@ class CaseOf:
         first = True
         for i, c in enumerate(kids):
             if c.type == 'comment':
-                code += ctx.text(c) + nl + indent
+                # a // comment's node holds the CR of a CRLF file: left in, it makes a CR CR LF,
+                # and dcc counts the lone CR as a line, so its messages' line numbers drift
+                code += ctx.text(c).rstrip('\r') + nl + indent
             elif c.type == 'caseCase':
                 tests = []
                 for label in c.children[0].children:

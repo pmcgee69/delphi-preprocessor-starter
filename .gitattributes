@@ -1,1 +1,3 @@
 *.cmd text eol=crlf
+# these test CRLF files as Delphi sources usually are: keep their bytes
+tests/cases/case-of/crlf*.pas -text
