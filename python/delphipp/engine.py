@@ -84,6 +84,13 @@ def decode(raw: bytes) -> tuple[str, str]:
 
 def run(raw: bytes, rules, filename: str = '<input>') -> tuple[bytes, list[Message]]:
     """Run the rules over one file's bytes: (the output's bytes, the messages)."""
+    out, messages, _ = run_with_edits(raw, rules, filename)
+    return out, messages
+
+
+def run_with_edits(raw: bytes, rules, filename: str = '<input>') -> tuple[bytes, list[Message], list[Edit]]:
+    """As run, and the edits applied, in source order, for a tool to show or map lines through:
+    none if they overlapped."""
     encoding, _ = decode(raw)
     tree = parser().parse(raw)
     ctx = Context(raw, filename, encoding)
@@ -106,7 +113,10 @@ def run(raw: bytes, rules, filename: str = '<input>') -> tuple[bytes, list[Messa
             ctx.rule = rule.name
             rule.visit(node, ctx)
         stack.extend(reversed(node.children))
-    return _apply(raw, ctx), sorted(ctx.messages, key=lambda m: (m.line, m.col))
+    out = _apply(raw, ctx)
+    applied = [] if any(m.rule == 'engine' for m in ctx.messages) else \
+        sorted(ctx.edits, key=lambda e: (e.start, e.end))
+    return out, sorted(ctx.messages, key=lambda m: (m.line, m.col)), applied
 
 
 def _first_error(root):

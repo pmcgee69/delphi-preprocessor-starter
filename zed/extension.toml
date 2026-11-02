@@ -1,0 +1,15 @@
+id = "delphipp"
+name = "Delphi (delphipp)"
+version = "0.1.0"
+schema_version = 1
+authors = ["Paul McGee"]
+description = "Delphi highlighting from tree-sitter-delphi13, and delphi-preprocessor-starter's rules as you type"
+repository = "https://github.com/pmcgee69/delphi-preprocessor-starter"
+
+[grammars.delphi13]
+repository = "https://github.com/Alexl-git/tree-sitter-delphi13"
+rev = "5e59a27edc6eb5703feb23071dc9f0d1d9e41e85"
+
+[language_servers.delphipp]
+name = "delphipp"
+languages = ["Delphi"]

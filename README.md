@@ -57,6 +57,10 @@ python -m delphipp -o ..\out ..\tests\cases\assert-message\basic.pas
 checks its SHA-256, and puts them in `build\`. No C compiler is needed: py-tree-sitter loads
 the grammar's DLL directly.
 
+**In [Zed](https://zed.dev):** highlighting from the same grammar, the rules' findings and rewrites
+on your code as you type, one-click applying, and a task to compile the result with dcc64. A short
+tour is in [`zed\README.md`](zed/README.md).
+
 ## The example rules
 
 - **`with`** (`python\delphipp\rules\with_statement.py`), a check: every `with` statement,
