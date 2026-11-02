@@ -14,8 +14,8 @@ import pathlib
 import urllib.request
 import zipfile
 
-VERSION = '0.1.0'
-SHA256 = 'e84085ef83ba5445fd964c66c19c9a3c589af25db720dd8af11ffec51fcf4b9a'
+VERSION = '0.2.0'
+SHA256 = 'd5a20544fe0fdde58151584345c0c8c0e01d4c7d437308c9ee9717305c3a7fda'
 URL = (f'https://github.com/pmcgee69/TreeSitter4D/releases/download/v{VERSION}/'
        f'TreeSitter4D-{VERSION}-dlls.zip')
 BUILD = pathlib.Path(__file__).resolve().parents[1] / 'build'

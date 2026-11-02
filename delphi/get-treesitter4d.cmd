@@ -6,8 +6,8 @@ rem Everything lands in delphi\TreeSitter4D (ignored by git).
 rem   get-treesitter4d.cmd
 setlocal
 cd /d "%~dp0"
-set VER=0.1.0
-set SHA=f01847c5bf5faf9cbd1c89981bc2c32339133ffd7ca94044ec2068f5564cf2d1
+set VER=0.2.0
+set SHA=e595c8b900f88e449f023c37fe1c18ba6ff0c030f7959bcfcc529489dd38ea87
 set ZIP=TreeSitter4D-%VER%-objects.zip
 set URL=https://github.com/pmcgee69/TreeSitter4D/releases/download/v%VER%/%ZIP%
 rem Windows' own tar reads zip files; another on the PATH (Git's) may not
