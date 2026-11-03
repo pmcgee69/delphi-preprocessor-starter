@@ -31,7 +31,8 @@ uses
   DelphiPP.Rule.WithAndTry,
   DelphiPP.Rule.UsesMerge,
   DelphiPP.Rule.CaseOf,
-  DelphiPP.Rule.AutoProperty;
+  DelphiPP.Rule.AutoProperty,
+  DelphiPP.Rule.DoubleQuotes;
 
 function AllRules: TArray<TRule>;
 begin
@@ -40,7 +41,8 @@ begin
              TWithAndTry.Create,
              TUsesMerge.Create,
              TCaseOf.Create,
-             TAutoProperty.Create];
+             TAutoProperty.Create,
+             TDoubleQuotes.Create];
 end;
 
 function RulesNamed(const Names: string): TArray<TRule>;

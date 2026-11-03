@@ -95,7 +95,8 @@ run = subprocess.run([sys.executable, '-m', 'delphipp.build', str(PY.parent / 't
                      cwd=PY, capture_output=True, text=True, encoding='utf-8', errors='replace')
 print(run.stdout[-300:])
 assert run.returncode == 0, run.stdout + run.stderr
-assert 'Ada: a greeting, a farewell, something else' in run.stdout and 'strings' in run.stdout
+assert 'Ada: a greeting, a farewell, something else' in run.stdout and 'strings' in run.stdout \
+    and "and 'quoted'" in run.stdout
 
 # build: an error on the file's own line, below rewrites that moved the output's
 broken = TOUR.replace("    L.Free;\n", "    NoSuchRoutine(1);\n    L.Free;\n")

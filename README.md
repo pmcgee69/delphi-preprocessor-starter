@@ -117,6 +117,9 @@ The two checks, `with` and `with-try`, are written but switched off: they are le
                                            property Name: string read FName write FName;
                                          end;
   ```
+- **`double-quotes`** (`python\delphipp\rules\double_quotes.py`), a rewrite, the simplest
+  there is, to learn from rather than to use: each `"` inside a string becomes `''`, so
+  `'say "hi"'` becomes `'say ''hi'''`. One kind of node, and its whole text replaced.
 
 `uses-merge`, `case-of` and `auto-property` come from Vincent Parrett's
 [*Delphi language enhancements*](https://www.finalbuilder.com/resources/blogs/delphi-language-enhancements)

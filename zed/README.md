@@ -106,6 +106,7 @@ The rules rewrite a copy in a temporary folder, and that compiles and runs:
 ```
 Ada: a greeting, a farewell, something else
 strings
+and 'quoted'
 ```
 
 Your `Tour.dpr` isn't changed. **Rules: show what they change in this file** shows the rewrite.

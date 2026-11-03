@@ -51,6 +51,7 @@ begin
     Assert(P.Name <> '');       // gains its file, line and text (assert-message)
     WriteLn(P.Name, ': ', Greeting('hi'), ', ', Greeting('bye'), ', ', Greeting('?'));
     WriteLn(KindOf(L));
+    WriteLn('and "quoted"');    // each " becomes '' (double-quotes)
     try
       L.Add('x');
     except                      // swallows every exception (with-try)
