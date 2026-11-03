@@ -15,17 +15,19 @@ impl zed::Extension for Delphipp {
         worktree: &zed::Worktree,
     ) -> Result<zed::Command> {
         // The open folder's rules first; then the clone this extension was built from, for a
-        // folder without them (a file opened from elsewhere, or another project)
-        let (os, _) = zed::current_platform();
-        let sep = if os == zed::Os::Windows { ";" } else { ":" };
-        let built = concat!(env!("CARGO_MANIFEST_DIR"), "/../python");
+        // folder without them (a file opened from elsewhere, or another project). Zed builds
+        // through its link to the zed folder, so Python follows the link before going up:
+        // Windows reads link\.. as the folder holding the link
+        let launch = format!(
+            "import os, sys, runpy; \
+             sys.path.append(os.path.join(os.path.dirname(os.path.realpath(r'{}')), 'python')); \
+             runpy.run_module('delphipp.lsp', run_name='__main__', alter_sys=True)",
+            env!("CARGO_MANIFEST_DIR")
+        );
         Ok(zed::Command {
             command: worktree.which("python").unwrap_or_else(|| "python".to_string()),
-            args: vec!["-m".to_string(), "delphipp.lsp".to_string()],
-            env: vec![(
-                "PYTHONPATH".to_string(),
-                format!("{}/python{}{}", worktree.root_path(), sep, built),
-            )],
+            args: vec!["-c".to_string(), launch],
+            env: vec![("PYTHONPATH".to_string(), format!("{}/python", worktree.root_path()))],
         })
     }
 }
