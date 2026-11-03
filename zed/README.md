@@ -73,11 +73,12 @@ something for every example rule. You should see it in colour, with some code un
 is a warning); others say what they would write instead. To see them all in one list, open the
 command palette and run **diagnostics: deploy**.
 
-**Apply a rule.** Click on any line, and press **Ctrl+.** (Ctrl and the full stop) for the *code
-actions*. Choose **Apply case-of to this file**, and watch the `case` on strings become `if`s. Press
-**Ctrl+Z** to undo. Nothing changes until you choose it, and nothing is saved until you save.
-If Ctrl+. does nothing the first time, right-click on the line and choose **Show Code Actions**;
-after that, Ctrl+. works too (found by the first user, 3 Nov).
+**Apply a rule.** Click on any line of the file, so the cursor is in it, and press **Ctrl+.** (Ctrl
+and the full stop) for the *code actions*. Ctrl+. does nothing while the list of files on the left
+has the focus; click in the file first, or right-click on a line and choose **Show Code Actions**
+(found by the first user, 3 Nov). Choose **Apply case-of to this file**, and watch the `case` on
+strings become `if`s. It rewrites the file you have open, in place, not a copy. Press **Ctrl+Z** to
+undo. Nothing changes until you choose it, and nothing is saved until you save.
 
 **Compile it.** Press **Ctrl+Shift+P**, type `task spawn`, and press Enter on **task: spawn**. A
 second list opens, of the tasks this folder defines: choose **Rules: compile and run this file**. A
