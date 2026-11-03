@@ -18,11 +18,18 @@ from delphipp import engine, rules             # noqa: E402
 
 update = '--update' in sys.argv
 failed = total = 0
+# a rule written in Python but left out of ALL is switched off, not missing
+written = {line.split("'")[1]
+           for f in (ROOT / 'python' / 'delphipp' / 'rules').glob('*.py')
+           for line in f.read_text(encoding='utf-8').splitlines()
+           if line.startswith("    name = '")}
 for case in sorted((ROOT / 'tests' / 'cases').glob('*/*.pas')):
     if case.name.endswith('.out.pas'):
         continue
     if case.parent.name not in {r.name for r in rules.ALL}:
-        print(f"skip  {case.parent.name}/{case.name}: a Delphi-only rule")
+        why = ('left out of ALL in rules/__init__.py' if case.parent.name in written
+               else 'a Delphi-only rule')
+        print(f"skip  {case.parent.name}/{case.name}: {why}")
         continue
     total += 1
     rule = rules.by_name(case.parent.name)
