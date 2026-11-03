@@ -41,6 +41,8 @@ var
   P: TPerson;
   L: TStringList;
 begin
+  // Oops;                      // take out the // to break it: dcc names this line
+
   P := TPerson.Create;
   L := TStringList.Create;
   try

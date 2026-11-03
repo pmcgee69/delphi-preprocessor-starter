@@ -94,8 +94,9 @@ strings
 
 Your `Tour.dpr` isn't changed. **Rules: show what they change in this file** shows the rewrite.
 
-**Break something.** Type `Oops;` on a line by itself after `begin`, save with **Ctrl+S**, and compile
-again. The error names the line in *your* file, though the compiler saw the rewritten copy.
+**Break something.** Just after `begin` is a line `// Oops;`. Delete its `//`, save with **Ctrl+S**,
+and compile again. The error names the line in *your* file, line 44, though the compiler saw the
+rewritten copy. Put the `//` back afterwards.
 
 ## 5. Where next
 
