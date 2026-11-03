@@ -17,15 +17,22 @@ press Enter.
 
 ## 1. Install three things
 
-**Zed.** Download it from [zed.dev/download](https://zed.dev/download) and run the installer.
+**Zed.** 
 
-**Python.** Download it from [python.org/downloads](https://www.python.org/downloads/) and run the
+Download it from [zed.dev/download](https://zed.dev/download) and run the installer.
+
+**Python.** 
+
+Download it from [python.org/downloads](https://www.python.org/downloads/) and run the
 installer. On its first screen, **tick "Add python.exe to PATH"** before you click Install. It's easy
 to miss, and nothing below works without it.
 
-**Rust.** Zed uses it to build the small extension in this folder, and you won't write any. Download
-`rustup-init.exe` from [rustup.rs](https://rustup.rs) and run it. A black window asks questions: press
-Enter to accept the defaults. If it offers to install Visual Studio build tools, say yes.
+**Rust.** 
+
+Zed uses it to build the small extension in this folder - you won't need to write any. 
+Download `rustup-init.exe` from [rustup.rs](https://rustup.rs) and run it. 
+A black window asks questions: press Enter to accept the defaults. 
+If it offers to install Visual Studio build tools, say yes.
 
 To check they worked, open a **new** Command Prompt (an old one won't see them) and run:
 
@@ -38,11 +45,14 @@ Each should print a version number.
 
 ## 2. Get this project
 
-**The easy way:** on the [project's page](https://github.com/pmcgee69/delphi-preprocessor-starter),
-click the green **Code** button, then **Download ZIP**. Unzip it somewhere with a short path, such as
-`C:\delphipp`, so that the folder holds `README.md` directly.
+**The easy way:** 
 
-**Or with git:** `git clone https://github.com/pmcgee69/delphi-preprocessor-starter C:\delphipp`
+On the [project's page](https://github.com/pmcgee69/delphi-preprocessor-starter), click the green **Code** button, then **Download ZIP**. 
+Unzip it somewhere with a short path, such as `C:\delphipp`, so that the folder holds `README.md` directly.
+
+**Or with git:** 
+
+`git clone https://github.com/pmcgee69/delphi-preprocessor-starter C:\delphipp`
 
 Then, in your Command Prompt:
 
@@ -53,21 +63,21 @@ python tools\get-grammar.py
 python tools\check-setup.py
 ```
 
-The last command checks everything and tells you how to fix whatever is missing. When it says
-`All set`, carry on. It's fine if only `dcc64` and `dcc32` are missing: see "Compiling" below.
+The last command checks everything and tells you how to fix whatever is missing. 
+When it says `All set`, carry on. It's fine if only `dcc64` and `dcc32` are missing: see "Compiling" below.
 
 ## 3. Open it in Zed
 
 1. Start Zed. Choose **File, Open Folder** (the command may just be **Open** on the File menu), and
    pick `C:\delphipp`. Open that top folder, not a folder inside it.
 2. Press **Ctrl+Shift+P**. This opens the *command palette*, a search box for everything Zed can do,
-   and the one thing worth remembering. Type `install dev extension`, and press Enter on
-   **zed: install dev extension**. From here on, "run **some: command**" means exactly this:
-   Ctrl+Shift+P, type its name, Enter.
+   and the one thing worth remembering. Type `install dev extension`, and select
+   **zed: install dev extension**. 
+From here on, "run **some: command**" means exactly this:    Ctrl+Shift+P, type its name, Enter.
 3. Pick the `zed` folder inside `C:\delphipp`.
 
-The first time, this takes a few minutes, with little to show for it: Zed is downloading a compiler
-and building the extension.
+The first time, this takes a few minutes ... there is a progress message at the very bottom of the window: 
+Zed is downloading a compiler and building the extension.
 
 ## 4. Take the tour
 
@@ -75,22 +85,23 @@ In the list of files on the left, open `tests`, then `tour`, then **Tour.dpr**. 
 something for every example rule. You should see it in colour, with some code underlined.
 
 **See what the rules say.** Hover the mouse over underlined code. Each rule says what it would write
-instead. (The checks, `with` and `with-try`, which report a problem rather than rewrite, are switched
-off: add them back to `ALL` in `python\delphipp\rules\__init__.py` to see their warnings.) To see them all in one list, open the
-command palette and run **diagnostics: deploy**.
+instead. To see them all in one list, open the command palette and run **diagnostics: deploy**.
+
+(The checks, `with` and `with-try`, which report a problem rather than rewrite, are switched
+off: add them back to `ALL` in `python\delphipp\rules\__init__.py` to see their warnings.) 
 
 **Apply a rule.** Click on any line of the file, so the cursor is in it, and press **Ctrl+.** (Ctrl
 and the full stop) for the *code actions*. Ctrl+. does nothing while the list of files on the left
-has the focus; click in the file first, or right-click on a line and choose **Show Code Actions**
-(found by the first user, 3 Nov). Choose **Apply case-of to this file**, and watch the `case` on
-strings become `if`s. It rewrites the file you have open, in place, not a copy. Press **Ctrl+Z** to
-undo. Nothing changes until you choose it, and nothing is saved until you save.
+has the focus; click in the file first, or right-click on a line and choose **Show Code Actions**. 
+Choose **Apply case-of to this file**, and watch the `case` on
+strings become `if`s. It rewrites the file you have open, in place, not a copy. 
+Press **Ctrl+Z** to undo. Nothing changes until you choose it, and nothing is saved until you save.
 
-**Compile it.** Press **Ctrl+Shift+P**, type `task spawn`, and press Enter on **task: spawn**. A
-second list opens, of the tasks this folder defines: choose **Rules: compile and run this file**. A
-terminal opens at the bottom. Delphi can't compile `Tour.dpr` as written: it has
-no `case` on strings and no property without `read` or `write`. The rules rewrite a copy in a temporary
-folder, and that compiles and runs:
+**Compile it.** Press **Ctrl+Shift+P**, type `task spawn`, and select **task: spawn**. 
+A second list opens, of the tasks this folder defines: choose **Rules: compile and run this file**. 
+A terminal opens at the bottom. Delphi can't compile `Tour.dpr` as written: it has
+no `case` on strings and no property without `read` or `write`. 
+The rules rewrite a copy in a temporary folder, and that compiles and runs:
 
 ```
 Ada: a greeting, a farewell, something else
@@ -99,9 +110,10 @@ strings
 
 Your `Tour.dpr` isn't changed. **Rules: show what they change in this file** shows the rewrite.
 
-**Break something.** Just after `begin` is a line `// Oops;`. Delete its `//`, save with **Ctrl+S**,
-and compile again. The error names the line in *your* file, line 44, though the compiler saw the
-rewritten copy. Put the `//` back afterwards.
+**Break something.** Just after `begin` is a line `// Oops;`. 
+Delete its `//`, save with **Ctrl+S**, and compile again. 
+The error names the line in *your* file, line 44, though the compiler saw the rewritten copy. 
+Put the `//` back afterwards.
 
 ## 5. Where next
 
