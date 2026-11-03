@@ -11,6 +11,21 @@ against the same tests in [`tests\cases\`](tests/cases/). Over Delphi 13's `sour
 the two give the same messages, line for line, and the same files, byte for byte. Use either,
 or both.
 
+## Try it in Zed
+
+**The rules run in [Zed](https://zed.dev), a free editor, as you type.** Open a Delphi file and it
+is highlighted; the rules underline what they would change, hovering shows the new text, Ctrl+.
+applies it, and a task compiles and runs the result with dcc64. No experience of Zed, Python or Rust
+needed: about fifteen minutes, mostly downloads.
+
+| To | Go to |
+|---|---|
+| Set it up, step by step, from nothing | [`zed\README.md`](zed/README.md), the guide |
+| Follow along with tick-boxes and copy buttons | [DelphiPP in Zed](https://claude.ai/artifact/5gpt4nd8AD5bbmQ6mCafyW), the same guide as one page |
+| Write a rule and see it in Zed | [Building the QUOTES Rule](https://claude.ai/artifact/FKem1w4m1shY9nVNexdJvh), the Python walkthrough |
+
+Zed runs the Python rules; the Delphi ones run from the command line (below).
+
 ## New to it? 
 Start with the hand-held walkthrough:
 [Building the WITH Rule](https://claude.ai/artifact/BKj5CUoyiY6SmPsJ5ahf4J), an illustrated
@@ -62,9 +77,7 @@ python -m delphipp -o ..\out ..\tests\cases\assert-message\basic.pas
 checks its SHA-256, and puts them in `build\`. No C compiler is needed: py-tree-sitter loads
 the grammar's DLL directly.
 
-**In [Zed](https://zed.dev), a free editor:** highlighting from the same grammar, the rules' findings
-and rewrites on your code as you type, one-click applying, and a task to compile the result. New to
-all of this? [`zed\README.md`](zed/README.md) takes you through it from nothing, step by step.
+**In [Zed](https://zed.dev):** see [Try it in Zed](#try-it-in-zed) above.
 
 ## The example rules
 

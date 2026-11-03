@@ -2,7 +2,8 @@
 
 **No experience of Zed, Python or Rust needed.** This takes about 15 minutes, most of it downloads.
 At the end you'll have Delphi code highlighted, messages from the rules appearing as you type, and a
-program that Delphi can't compile on its own compiling and running.
+program that Delphi can't compile on its own compiling and running. The same steps, with tick-boxes
+and copy buttons: [DelphiPP in Zed](https://claude.ai/artifact/5gpt4nd8AD5bbmQ6mCafyW).
 
 [Zed](https://zed.dev) is a free code editor. It doesn't replace the Delphi IDE, and it doesn't touch
 your projects: you're only opening this folder of examples in it.
