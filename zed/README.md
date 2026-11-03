@@ -75,6 +75,8 @@ command palette and run **diagnostics: deploy**.
 **Apply a rule.** Click on any line, and press **Ctrl+.** (Ctrl and the full stop) for the *code
 actions*. Choose **Apply case-of to this file**, and watch the `case` on strings become `if`s. Press
 **Ctrl+Z** to undo. Nothing changes until you choose it, and nothing is saved until you save.
+If Ctrl+. does nothing the first time, right-click on the line and choose **Show Code Actions**;
+after that, Ctrl+. works too (found by the first user, 3 Nov).
 
 **Compile it.** Open the command palette and run **task: spawn**, then choose **Rules: compile and
 run this file**. A terminal opens at the bottom. Delphi can't compile `Tour.dpr` as written: it has
