@@ -18,6 +18,11 @@ owner's manual in 15 pages. It builds the Delphi `with` rule step by step, from 
 its tree - to a tested rule, then runs it over Delphi's own RTL, and finally shows a rule for two kinds
 of nodes.
 
+On the Python side, which is what Zed runs:
+[Building the QUOTES Rule](https://claude.ai/artifact/FKem1w4m1shY9nVNexdJvh), its sibling in 14
+pages, builds the simplest rewrite there is, `double-quotes`, from a sample and its tree to a tested
+rule, then shows it in Zed, and what it does to Delphi's own RTL.
+
 ## The promise
 
 **A file no rule changes comes out byte for byte as it went in.** Rules don't edit text: they

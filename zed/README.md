@@ -120,8 +120,10 @@ Put the `//` back afterwards.
 
 - **The other examples** are in `tests\cases`, a folder per rule. Each has an input (`basic.pas`) and
   the expected output (`basic.out.pas`).
-- **Read a rule.** They're short, in `python\delphipp\rules`, and `case_of.py` is the fullest.
-  [Building the WITH Rule](https://claude.ai/artifact/BKj5CUoyiY6SmPsJ5ahf4J) walks through writing one.
+- **Read a rule.** They're short, in `python\delphipp\rules`: `double_quotes.py` is the smallest,
+  `case_of.py` the fullest. [Building the QUOTES Rule](https://claude.ai/artifact/FKem1w4m1shY9nVNexdJvh)
+  walks through writing one in Python, the side Zed runs; [Building the WITH Rule](https://claude.ai/artifact/BKj5CUoyiY6SmPsJ5ahf4J)
+  does the same in Delphi.
 - **Write your own**, as the main [README](../README.md#writing-a-rule) describes. After changing a
   rule, run **editor: restart language server** from the command palette to see the new behaviour.
 
