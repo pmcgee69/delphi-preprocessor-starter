@@ -82,6 +82,27 @@ def decode(raw: bytes) -> tuple[str, str]:
     return 'latin-1', 'latin-1'
 
 
+def tree_text(raw: bytes) -> str:
+    """The file's tree, a node a line, indented by depth: its type, then a leaf's text or a
+    branch's line. What `kinds` lists and `node.type` returns are the names in it."""
+    encoding, _ = decode(raw)
+    lines = []
+
+    def walk(node, depth):
+        line = ('  ' * depth + node.type).ljust(40)
+        if node.child_count == 0:
+            text = raw[node.start_byte:node.end_byte].decode(encoding)
+            line += ' ' + text.replace('\r', '').replace('\n', ' ')
+        else:
+            line += f' line {node.start_point[0] + 1}'
+        lines.append(line.rstrip())
+        for c in node.children:
+            walk(c, depth + 1)
+
+    walk(parser().parse(raw).root_node, 0)
+    return ''.join(f'{l}\n' for l in lines)
+
+
 def run(raw: bytes, rules, filename: str = '<input>') -> tuple[bytes, list[Message]]:
     """Run the rules over one file's bytes: (the output's bytes, the messages)."""
     out, messages, _ = run_with_edits(raw, rules, filename)

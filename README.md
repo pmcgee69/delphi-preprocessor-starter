@@ -155,13 +155,15 @@ class WithStatement:
         # ctx.insert_before(node, '…') / ctx.insert_after(node, '…')
 ```
 
-1. **Find the node types.** Parse a sample and print its tree; the grammar's names are what
+1. **Find the node types.** Print a sample's tree, a node a line; the grammar's names are what
    `kinds` lists and what `node.type` returns:
 
-   ```python
-   from delphipp.grammar import parser
-   print(parser().parse(b"begin with A do B := 1; end.").root_node)
    ```
+   cd python
+   python -m delphipp --tree ..\tests\cases\double-quotes\basic.pas
+   ```
+
+   It prints what `delphi\bin\delphipp.exe --tree` prints, line for line.
 
    `node.child_by_field_name('entity')`, `node.named_children`, `ctx.text(node)` and
    `ctx.line(node)` take you around it.

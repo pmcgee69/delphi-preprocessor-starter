@@ -4,6 +4,7 @@
     python -m delphipp -o OUT FILE_OR_FOLDER...     also write each file, rewritten, under OUT
     python -m delphipp --rules with ...             only the rules named (comma-separated)
     python -m delphipp --list                       the rules there are
+    python -m delphipp --tree FILE                  the file's tree: the node types a rule sees
 
 Run from the python folder (or put it on PYTHONPATH). Exit status 1 when a
 rule reports an error.
@@ -31,8 +32,12 @@ def main(argv=None):
     ap.add_argument('-o', '--out', help='write each file under this folder, rewritten')
     ap.add_argument('--rules', help='the rules to run, comma-separated (default: all)')
     ap.add_argument('--list', action='store_true', help='list the rules and stop')
+    ap.add_argument('--tree', metavar='FILE', help="print the file's tree and stop")
     a = ap.parse_args(argv)
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    if a.tree:
+        sys.stdout.write(engine.tree_text(pathlib.Path(a.tree).read_bytes()))
+        return 0
     if a.list:
         for r in rules.ALL:
             # a rule's description is its file's docstring, first line
