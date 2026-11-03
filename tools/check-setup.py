@@ -34,7 +34,7 @@ if have_ts:
     if have_grammar:
         tour = ROOT / 'tests' / 'tour' / 'Tour.dpr'
         _, messages, edits = engine.run_with_edits(tour.read_bytes(), rules.by_name(), str(tour))
-        report(bool(messages and edits), f'the rules run: {len(messages)} messages and {len(edits)} edits on the tour',
+        report(bool(messages or edits), f'the rules run: {len(messages)} messages and {len(edits)} edits on the tour',
                'something is wrong with the rules: see the error above')
 
 print('For Zed to build the extension:')

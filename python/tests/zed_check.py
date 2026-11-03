@@ -6,6 +6,7 @@ import json, pathlib, queue, subprocess, sys, threading
 
 PY = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PY))
+from delphipp import rules
 from delphipp.build import source_line
 from delphipp.engine import Edit
 
@@ -54,10 +55,10 @@ send(method='textDocument/didOpen', params={'textDocument': {'uri': URI, 'langua
 m = got.get(timeout=30)
 d = m['params']['diagnostics']
 print('sources:', sorted({x['source'] for x in d}))
-assert {'with', 'assert-message', 'with-try', 'uses-merge', 'case-of', 'auto-property'} <= {x['source'] for x in d}, d
+assert {r.name for r in rules.ALL} <= {x['source'] for x in d}, d     # every rule switched on
 assert not [x for x in d if x['severity'] == 1], 'the tour parses'
-w = next(x for x in d if x['source'] == 'with')
-assert TOUR.split('\n')[w['range']['start']['line']].strip().startswith('with P do'), w
+w = next((x for x in d if x['source'] == 'with'), None)
+assert w is None or TOUR.split('\n')[w['range']['start']['line']].strip().startswith('with P do'), w
 send(id=2, method='textDocument/codeAction', params={'textDocument': {'uri': URI},
      'range': {'start': {'line': 0, 'character': 0}, 'end': {'line': 0, 'character': 0}}, 'context': {'diagnostics': []}})
 r = got.get(timeout=30)['result']

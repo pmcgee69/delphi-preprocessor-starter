@@ -69,8 +69,9 @@ and building the extension.
 In the list of files on the left, open `tests`, then `tour`, then **Tour.dpr**. It's one program with
 something for every example rule. You should see it in colour, with some code underlined.
 
-**See what the rules say.** Hover the mouse over underlined code. Some rules report a problem (`with`
-is a warning); others say what they would write instead. To see them all in one list, open the
+**See what the rules say.** Hover the mouse over underlined code. Each rule says what it would write
+instead. (The checks, `with` and `with-try`, which report a problem rather than rewrite, are switched
+off: add them back to `ALL` in `python\delphipp\rules\__init__.py` to see their warnings.) To see them all in one list, open the
 command palette and run **diagnostics: deploy**.
 
 **Apply a rule.** Click on any line of the file, so the cursor is in it, and press **Ctrl+.** (Ctrl

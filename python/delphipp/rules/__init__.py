@@ -9,14 +9,14 @@
 Add yours to ALL. Each is in a file of its own, with a test folder of its
 own in tests/cases/<name>/.
 """
-from .assert_message import AssertMessage
 from .with_statement import WithStatement
-from .with_and_try import WithAndTry
-from .uses_merge import UsesMerge
-from .case_of import CaseOf
-from .auto_property import AutoProperty
+from .with_and_try   import WithAndTry
+from .assert_message   import AssertMessage
+from .uses_merge       import UsesMerge
+from .case_of          import CaseOf
+from .auto_property    import AutoProperty
 
-ALL = [WithStatement, AssertMessage, WithAndTry, UsesMerge, CaseOf, AutoProperty]
+ALL = [AssertMessage, UsesMerge, CaseOf, AutoProperty]
 
 
 def by_name(names=None):
