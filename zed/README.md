@@ -57,7 +57,8 @@ The last command checks everything and tells you how to fix whatever is missing.
    pick `C:\delphipp`. Open that top folder, not a folder inside it.
 2. Press **Ctrl+Shift+P**. This opens the *command palette*, a search box for everything Zed can do,
    and the one thing worth remembering. Type `install dev extension`, and press Enter on
-   **zed: install dev extension**.
+   **zed: install dev extension**. From here on, "run **some: command**" means exactly this:
+   Ctrl+Shift+P, type its name, Enter.
 3. Pick the `zed` folder inside `C:\delphipp`.
 
 The first time, this takes a few minutes, with little to show for it: Zed is downloading a compiler
@@ -78,8 +79,9 @@ actions*. Choose **Apply case-of to this file**, and watch the `case` on strings
 If Ctrl+. does nothing the first time, right-click on the line and choose **Show Code Actions**;
 after that, Ctrl+. works too (found by the first user, 3 Nov).
 
-**Compile it.** Open the command palette and run **task: spawn**, then choose **Rules: compile and
-run this file**. A terminal opens at the bottom. Delphi can't compile `Tour.dpr` as written: it has
+**Compile it.** Press **Ctrl+Shift+P**, type `task spawn`, and press Enter on **task: spawn**. A
+second list opens, of the tasks this folder defines: choose **Rules: compile and run this file**. A
+terminal opens at the bottom. Delphi can't compile `Tour.dpr` as written: it has
 no `case` on strings and no property without `read` or `write`. The rules rewrite a copy in a temporary
 folder, and that compiles and runs:
 
