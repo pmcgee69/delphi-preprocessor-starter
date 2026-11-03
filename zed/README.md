@@ -7,6 +7,11 @@ program that Delphi can't compile on its own compiling and running.
 [Zed](https://zed.dev) is a free code editor. It doesn't replace the Delphi IDE, and it doesn't touch
 your projects: you're only opening this folder of examples in it.
 
+**The rules are here twice:** in Python (`python\`) and in Delphi (`delphi\`), the same rules giving
+the same results, checked against the same tests. Zed runs the **Python** ones as you type, which is
+why this guide installs Python. The Delphi ones are for using the rules from Delphi, or reading them
+in Delphi: see "Where next" at the end.
+
 This is for Windows. Commands below go in a **Command Prompt**: press the Windows key, type `cmd`,
 press Enter.
 
