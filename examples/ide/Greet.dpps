@@ -1,0 +1,39 @@
+unit Greet;
+
+{ A .dpps file: Delphi the rules rewrite before dcc sees it. The project's pre-build event
+  writes Greet.pas from this file; edit this one, not Greet.pas. }
+
+interface
+
+type
+  TGreeting = record
+    Name  : string;
+    Lang  : string;
+    Times : Integer;
+  end;
+
+function Greeting(const G: TGreeting): string;
+
+implementation
+
+uses
+  System.SysUtils;
+
+function Greeting(const G: TGreeting): string;
+begin
+  Assert(G.Times > 0);            // assert-message: gains its text, file and line
+  var Hello: string;
+  case G.Lang of                  // case-of: a case on strings, which dcc refuses, as an if chain
+    'en': Hello := 'Hello';
+    'fr': Hello := 'Bonjour';
+    'de': Hello := 'Hallo';
+  else
+    Hello := 'G''day';
+  end;
+  Result := '';
+  for var I := 1 to G.Times do
+    Result := Result + Format('%s, %s! ', [Hello, G.Name]);
+  Result := Result.TrimRight;
+end;
+
+end.

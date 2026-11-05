@@ -26,6 +26,14 @@ needed: about fifteen minutes, mostly downloads.
 
 Zed runs the Python rules; the Delphi ones run from the command line (below).
 
+## In the Delphi IDE
+
+**A `.dpps` file is Delphi source the rules rewrite before dcc sees it.** A project's pre-build
+event writes the `.pas` from it, and the IDE builds as usual; a rule's errors and warnings are in
+the Messages pane, on the `.dpps` line. No package to install: a project setting.
+[`examples\ide\`](examples/ide/) is a project to open and build, with a `case` on strings that
+the rules make into Delphi dcc accepts.
+
 ## New to it? 
 Start with the hand-held walkthrough:
 [Building the WITH Rule](https://claude.ai/artifact/BKj5CUoyiY6SmPsJ5ahf4J), an illustrated
