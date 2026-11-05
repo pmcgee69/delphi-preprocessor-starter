@@ -9,6 +9,7 @@ delphi/bin/
 
 # examples/ide: the .pas its pre-build event writes, and what the IDE and dcc leave
 examples/ide/Greet.pas
+examples/ide/Hello.res
 examples/ide/Win32/
 examples/ide/Win64/
 *.dproj.local
