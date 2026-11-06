@@ -6,7 +6,9 @@ program MarksTest;
   the messages after it. The package's TAnalysis, without the IDE.
 
     MarksTest FILE
-    MarksTest FILE LINE COL     what the mouse there would show }
+    MarksTest FILE LINE COL     what the mouse there would show
+    MarksTest --tabs=STOPS ...  with the editor's tab stops, as '2' or '9 17' (default 8):
+                                lines are printed with their tabs as spaces }
 
 {$APPTYPE CONSOLE}
 
@@ -16,13 +18,20 @@ uses
 
 begin
   try
-    const Text  = TFile.ReadAllBytes(ParamStr(1));
+    var Args: TArray<string>;
+    var Tabs := '';
+    for var I := 1 to ParamCount do
+      if ParamStr(I).StartsWith('--tabs=') then
+        Tabs := ParamStr(I).Substring(7)
+      else
+        Args := Args + [ParamStr(I)];
+    const Text  = TFile.ReadAllBytes(Args[0]);
     const Lines = TEncoding.UTF8.GetString(Text).Split([#10]);
-    const A = TAnalysis.Create(Text, ParamStr(1));
+    const A = TAnalysis.Create(Text, Args[0], Tabs);
     try
-      if ParamCount >= 3 then
+      if Length(Args) >= 3 then
       begin
-        Writeln(A.HoverAt(ParamStr(2).ToInteger, ParamStr(3).ToInteger));
+        Writeln(A.HoverAt(Args[1].ToInteger, Args[2].ToInteger));
         Exit;
       end;
       for var L := 1 to Length(Lines) do
@@ -33,7 +42,7 @@ begin
         A.Notes.TryGetValue(L, Notes);
         if (Spans = nil) and (Notes = nil) then
           Continue;
-        const Line = Lines[L - 1].TrimRight;
+        const Line = A.Expand(Lines[L - 1].TrimRight);
         Writeln(Format('%4d  %s', [L, Line]));
         var Under := StringOfChar(' ', Length(Line) + 1);
         for var S in Spans do

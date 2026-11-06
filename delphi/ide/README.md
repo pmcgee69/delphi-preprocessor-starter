@@ -66,7 +66,8 @@ bin\test\MarksTest.exe ..\..\examples\ide\Greet.dpps 24 21     rem the hover at 
 
 ## Not yet
 
-- **Tabs**: a tab is counted as one column, so on a line with tabs before a mark, the mark is
-  drawn too far left.
+- **Tabs** are counted to the editor's tab stops (its *Tab stops* option: one number is a stop
+  every that many columns; several are the stops). Tested here, not yet seen in the IDE on a
+  file with tabs.
 - **Only `.dpps` and `.dpps.pas` files.** A plain `.pas` isn't marked: the rules would mark
   every `Assert` in every unit you open.

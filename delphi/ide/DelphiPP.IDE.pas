@@ -80,6 +80,18 @@ begin
   Exit( Low.EndsWith('.dpps') or Low.EndsWith('.dpps.pas') );
 end;
 
+// the editor's tab stops for Delphi files, as '2' or '9 17' ('' if they can't be read)
+function TabStops: string;
+begin
+  try
+    const Options = (BorlandIDEServices as IOTAEditorServices).GetEditOptions('Borland.EditOptions.Pascal');
+    if (Options <> nil) and (Options.BufferOptions <> nil) then
+      Exit( Options.BufferOptions.TabStops );
+  except
+  end;
+  Exit( '' );
+end;
+
 // the buffer's text: the editor gives it as UTF-8
 function BufferText(const Buffer: IOTAEditBuffer): TBytes;
 const
@@ -255,7 +267,7 @@ begin
     const OldShape = if Old <> nil then Old.Shape else '';
     var New: TAnalysis;
     try
-      New := TAnalysis.Create(Text, View.Buffer.FileName);
+      New := TAnalysis.Create(Text, View.Buffer.FileName, TabStops);
     except
       // no marks rather than the old text's marks on the new text's lines
       FFiles.Remove(Key);
@@ -356,7 +368,7 @@ begin
       begin
         // the messages, after the end of the line's text
         const LineText = Context.LineState.Text;
-        const R = State.GetCharacterPosPx(Length(LineText.TrimRight) + 4, Visible);
+        const R = State.GetCharacterPosPx(Length(A.Expand(LineText.TrimRight)) + 4, Visible);
         var X := R.Left;
         Canvas.Brush.Style := bsClear;
         Canvas.Font.Style  := [fsItalic];

@@ -37,9 +37,12 @@ type
     Spans : TDictionary<Integer, TArray<TSpan>>;    // by line, from 1
     Notes : TDictionary<Integer, TArray<TNote>>;
     Shape : string;                                   // the spans and notes, to tell a change
-    constructor Create(const AText: TBytes; const FileName: string);
+    Stops : TArray<Integer>;                          // the editor's tab stops, as columns
+    // TabStops is the editor's option, as '2' or '9 17'
+    constructor Create(const AText: TBytes; const FileName: string; const TabStops: string = '');
     destructor Destroy; override;
     function HoverAt(Line, Col: Integer): string;     // '' where nothing is marked
+    function Expand(const LineText: string): string;  // its tabs as the spaces the editor shows
   end;
 
 implementation
@@ -69,6 +72,40 @@ end;
 
 { TAnalysis }
 
+// A tab goes to the next tab stop. The option is read as Delphi's help describes it, but not
+// yet seen on a file with tabs in the IDE (a guess, 7 Nov): one number N is a stop every N
+// columns; several (9 17) are the stops, and past the last they go on at its interval
+function TAnalysis.Expand(const LineText: string): string;
+begin
+  Result := '';
+  for var Ch in LineText do
+    if Ch <> #9 then
+      Result := Result + Ch
+    else
+    begin
+      const Col = Length(Result) + 1;               // the column the tab is in
+      var Next := 0;
+      if Length(Stops) = 1 then
+        Next := ((Col - 1) div Stops[0] + 1) * Stops[0] + 1
+      else
+      begin
+        for var S in Stops do
+          if S > Col then
+          begin
+            Next := S;
+            Break;
+          end;
+        if Next = 0 then
+        begin
+          const Last = Stops[High(Stops)];
+          const Step = Last - Stops[High(Stops) - 1];
+          Next := Last + ((Col - Last) div Step + 1) * Step;
+        end;
+      end;
+      Result := Result + StringOfChar(' ', Next - Col);
+    end;
+end;
+
 function TAnalysis.HoverAt(Line, Col: Integer): string;
 begin
   Result := '';
@@ -82,10 +119,19 @@ begin
       Result := if Result = '' then S.Hover else Result + sLineBreak + sLineBreak + S.Hover;
 end;
 
-constructor TAnalysis.Create(const AText: TBytes; const FileName: string);
+constructor TAnalysis.Create(const AText: TBytes; const FileName: string; const TabStops: string);
 begin
   inherited Create;
   Text  := AText;
+  // stops that rise, or a stop every 8 columns
+  for var Part in TabStops.Split([' ', ','], TStringSplitOptions.ExcludeEmpty) do
+  begin
+    const N = StrToIntDef(Part, 0);
+    if (N > 0) and ((Stops = nil) or (N > Stops[High(Stops)])) then
+      Stops := Stops + [N];
+  end;
+  if Stops = nil then
+    Stops := [8];
   Spans := TDictionary<Integer, TArray<TSpan>>.Create;
   Notes := TDictionary<Integer, TArray<TNote>>.Create;
 
@@ -96,7 +142,7 @@ begin
       Starts := Starts + [I + 1];
 
   // a byte offset as (line from 1, the editor's column from 1): the characters before it
-  // on its line, counted as the editor counts them (UTF-16; a tab as one, for now)
+  // on its line, counted as the editor counts them (UTF-16, a tab to its tab stop)
   var LineOf: TFunc<Integer, Integer> := function(Offset: Integer): Integer
   begin
     var Lo := 0;
@@ -111,7 +157,7 @@ begin
   var ColOf: TFunc<Integer, Integer, Integer> := function(Line, Offset: Integer): Integer
   begin
     const S = Starts[Line - 1];
-    Exit( 1 + Length(TEncoding.UTF8.GetString(Text, S, Offset - S)) );
+    Exit( 1 + Length(Expand(TEncoding.UTF8.GetString(Text, S, Offset - S))) );
   end;
   // the end of a line's text, by byte, before its CR LF
   var LineEnd: TFunc<Integer, Integer> := function(Line: Integer): Integer
