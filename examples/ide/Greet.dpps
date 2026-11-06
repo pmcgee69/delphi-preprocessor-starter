@@ -1,7 +1,7 @@
 unit Greet.dpps;
 
 { A .dpps source: Delphi the rules rewrite before dcc sees it. The project's pre-build event
-  writes Greet.pas from this file, as `unit Greet`; edit this one, not Greet.pas. }
+  writes Greet.pas from this file; edit this one, not Greet.pas. }
 
 interface
 

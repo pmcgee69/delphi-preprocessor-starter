@@ -12,8 +12,10 @@ begin
   G.Lang  := 'fr';
   G.Times := 2;
   WriteLn(Greeting(G));
+
   G.Lang  := 'xx';
   G.Times := 1;
   WriteLn(Greeting(G));
+
   Readln;
 end.
