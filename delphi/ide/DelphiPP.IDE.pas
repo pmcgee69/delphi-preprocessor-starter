@@ -102,7 +102,20 @@ end;
 function TCodeHint.CalcHintRect(MaxWidth: Integer; const AHint: string; AData: TCustomData): TRect;
 begin
   inherited;                                        // the hint font, at the screen's scale
+  // the editor's own font and size (user, 7 Nov, the hint's size: "text is kinda small")
   Canvas.Font.Name := 'Consolas';
+  try
+    const Options = (BorlandIDEServices as IOTAEditorServices).GetEditOptions('Borland.EditOptions.Pascal');
+    if Options <> nil then
+    begin
+      if Options.FontName <> '' then
+        Canvas.Font.Name := Options.FontName;
+      if Options.FontSize > 0 then
+        Canvas.Font.Size := Options.FontSize;
+    end;
+  except
+    // the hint font's size, in Consolas
+  end;
   Result := Rect(0, 0, MaxWidth, 0);
   DrawText(Canvas.Handle, AHint, -1, Result, DT_CALCRECT or DT_LEFT or DT_NOPREFIX);
   Inc(Result.Right, 6);
