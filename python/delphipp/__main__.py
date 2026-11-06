@@ -18,8 +18,9 @@ written from it, every time, so a project's pre-build event can run this and the
 DPPS-rule: text`, which MSBuild's Exec, and so the IDE's Messages pane, lists as a warning or
 error; a hint is printed plain.
 
-The source may be named X.dpps.pas instead, so the IDE highlights it as Delphi: its header then
-names it as its file does, `unit X.dpps;`, and X.pas is written with `unit X;`.
+The source may be named X.dpps.pas instead, so the IDE highlights it as Delphi without a
+setting. Either way its header may name it `unit X.dpps;`, which tells the two apart in the
+IDE; X.pas is written with `unit X;`.
 """
 import argparse
 import pathlib
@@ -48,7 +49,7 @@ def generated(f: pathlib.Path) -> str | None:
     return None
 
 
-# `unit X.dpps;` as X.dpps.pas must name itself: in X.pas, `unit X;` (after a UTF-8 BOM too,
+# a source's `unit X.dpps;` is, in X.pas, `unit X;` (after a UTF-8 BOM too,
 # which the IDE may write)
 HEADER = re.compile(rb'(?im)^((?:\xef\xbb\xbf)?\s*(?:unit|program|library)\s+)([\w.]+?)\.dpps(\s*;)')
 

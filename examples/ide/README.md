@@ -8,6 +8,7 @@ Here two rules make a unit dcc would refuse into one it compiles:
 
 | In `Greet.dpps` | In `Greet.pas`, written from it |
 |---|---|
+| `unit Greet.dpps;`, so the IDE's tabs and lists tell the two apart | `unit Greet;` |
 | `case G.Lang of 'en': … 'fr': …` (a `case` on strings) | an `if` chain (`case-of`) |
 | `Assert(G.Times > 0)` | `Assert(G.Times > 0, 'Greet.dpps:24: G.Times > 0')` (`assert-message`) |
 
@@ -38,9 +39,9 @@ The IDE then opens a `.dpps` file as Delphi, highlighted, and keeps the setting 
 - **Edit the source, never `Greet.pas`**, and keep `Greet.pas` closed: the IDE compiles an open
   file from its editor, not from disk, and the next build replaces it anyway.
 
-(The source may also be called `Greet.dpps.pas`, with `unit Greet.dpps;`, which the IDE
-highlights without the setting above, but which it won't keep in the project; `Greet.pas` is
-written with `unit Greet;`.)
+(The source may also be called `Greet.dpps.pas`, which the IDE highlights without the setting
+above, but which it won't keep in the project. Either way its header may say `unit Greet;` or
+`unit Greet.dpps;`: `Greet.pas` is written with `unit Greet;`.)
 
 ## Try it
 
