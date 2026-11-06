@@ -6,6 +6,9 @@ rules do, as you type, as Zed does.
 - **What a rule would change** is underlined with a dotted line: the `case` on strings that
   `case-of` writes as an `if` chain. **Where a rule adds text** has a small solid caret: the
   place `assert-message` adds its text.
+- **Hover over a mark** and, after half a second, a hint shows what the rule writes there
+  (`case-of writes this as:` and the `if` chain; `assert-message adds:` and its text), or the
+  message. It goes when the mouse leaves the mark or the editor, or on a click or a key.
 - **A rule that fails** on the text (half typed, say) is said after line 1, and nothing else is
   shown until the text is one it can read.
 - **A rule's error, warning or hint** has a wavy underline where it is (red, amber or grey), and
@@ -49,6 +52,7 @@ IDE) or `Known Packages x64` (64-bit).
 ```
 dcc64 -Q -B -Ebin\test -NUbin\test "-NSSystem;Winapi" -U.. -U..\TreeSitter4D\delphi MarksTest.dpr
 bin\test\MarksTest.exe ..\..\examples\ide\Greet.dpps
+bin\test\MarksTest.exe ..\..\examples\ide\Greet.dpps 24 21     rem the hover at line 24, column 21
 ```
 
 ```
@@ -62,7 +66,6 @@ bin\test\MarksTest.exe ..\..\examples\ide\Greet.dpps
 
 ## Not yet
 
-- **Hover**, to show the text a rule writes, as Zed does.
 - **Tabs**: a tab is counted as one column, so on a line with tabs before a mark, the mark is
   drawn too far left.
 - **Only `.dpps` and `.dpps.pas` files.** A plain `.pas` isn't marked: the rules would mark

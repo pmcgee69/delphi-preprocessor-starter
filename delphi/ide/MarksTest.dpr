@@ -5,7 +5,8 @@ program MarksTest;
   ~ a message), and
   the messages after it. The package's TAnalysis, without the IDE.
 
-    MarksTest FILE }
+    MarksTest FILE
+    MarksTest FILE LINE COL     what the mouse there would show }
 
 {$APPTYPE CONSOLE}
 
@@ -17,8 +18,13 @@ begin
   try
     const Text  = TFile.ReadAllBytes(ParamStr(1));
     const Lines = TEncoding.UTF8.GetString(Text).Split([#10]);
-    const A = TAnalysis.Create(Text);
+    const A = TAnalysis.Create(Text, ParamStr(1));
     try
+      if ParamCount >= 3 then
+      begin
+        Writeln(A.HoverAt(ParamStr(2).ToInteger, ParamStr(3).ToInteger));
+        Exit;
+      end;
       for var L := 1 to Length(Lines) do
       begin
         var Spans: TArray<TSpan>;

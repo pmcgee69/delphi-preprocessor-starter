@@ -24,7 +24,7 @@ implementation
 
 uses
   System.SysUtils, System.Types, System.Classes, System.Math, System.Generics.Collections,
-  Vcl.Controls, Vcl.Graphics,
+  Vcl.Controls, Vcl.Graphics, Vcl.Forms, Vcl.ExtCtrls,
   ToolsAPI, ToolsAPI.Editor,
   DelphiPP.Marks;
 
@@ -38,10 +38,24 @@ type
   TRulesNotifier = class(TNTACodeEditorNotifier)
   private
     FFiles: TObjectDictionary<string, TAnalysis>;     // by file name, lower case
+    // the hover: a hint window of our own, as the ToolsAPI has none for this
+    FHint        : THintWindow;
+    FHintText    : string;            // what it shows, '' when hidden
+    FPendingText : string;            // what it will show when the mouse rests
+    FPendingPos  : TPoint;            // where, on the screen
+    FHintEditor  : TWinControl;
+    FTimer       : TTimer;            // the rest before showing; then, the mouse leaving
     procedure OnBeginPaint(const Editor: TWinControl; const ForceFullRepaint: Boolean);
     procedure OnPaintLine(const Rect: TRect; const Stage: TPaintLineStage;
       const BeforeEvent: Boolean; var AllowDefaultPainting: Boolean;
       const Context: INTACodeEditorPaintContext);
+    procedure OnMouseMove(const Editor: TWinControl; Shift: TShiftState; X, Y: Integer);
+    procedure OnMouseDown(const Editor: TWinControl; Button: TMouseButton; Shift: TShiftState;
+      X, Y: Integer);
+    procedure OnKeyDown(const Editor: TWinControl; Key: Word; Shift: TShiftState;
+      var Handled: Boolean);
+    procedure OnTimer(Sender: TObject);
+    procedure HideHint;
   protected
     function AllowedEvents: TCodeEditorEvents; override;
     function AllowedLineStages: TPaintLineStages; override;
@@ -82,19 +96,110 @@ constructor TRulesNotifier.Create;
 begin
   inherited Create;
   FFiles := TObjectDictionary<string, TAnalysis>.Create([doOwnsValues]);
+  FHint  := THintWindow.Create(nil);
+  FHint.Canvas.Font.Name := 'Consolas';           // the hover shows code
+  FTimer := TTimer.Create(nil);
+  FTimer.Enabled := False;
+  FTimer.OnTimer := OnTimer;
   OnEditorBeginPaint := OnBeginPaint;
   OnEditorPaintLine  := OnPaintLine;
+  OnEditorMouseMove  := OnMouseMove;
+  OnEditorMouseDown  := OnMouseDown;
+  OnEditorKeyDown    := OnKeyDown;
 end;
 
 destructor TRulesNotifier.Destroy;
 begin
+  FTimer.Free;
+  FHint.Free;
   FFiles.Free;
   inherited;
 end;
 
 function TRulesNotifier.AllowedEvents: TCodeEditorEvents;
 begin
-  Exit( [cevBeginEndPaintEvents, cevPaintLineEvents] );
+  Exit( [cevBeginEndPaintEvents, cevPaintLineEvents, cevMouseEvents, cevKeyboardEvents] );
+end;
+
+procedure TRulesNotifier.HideHint;
+begin
+  FPendingText := '';
+  FTimer.Enabled := False;
+  if FHintText <> '' then
+  begin
+    FHint.ReleaseHandle;
+    FHintText := '';
+  end;
+end;
+
+procedure TRulesNotifier.OnMouseMove(const Editor: TWinControl; Shift: TShiftState; X, Y: Integer);
+begin
+  try
+    var Text := '';
+    const Services = BorlandIDEServices as INTACodeEditorServices;
+    const View = Services.GetViewForEditor(Editor);
+    var A: TAnalysis;
+    if (View <> nil) and (View.Buffer <> nil) and Shown(View.Buffer.FileName) and
+       FFiles.TryGetValue(View.Buffer.FileName.ToLower, A) then
+    begin
+      const State = Services.EditorState[Editor];
+      var Col, Visible: Integer;
+      if State.PointToCharacterPos(Point(X, Y), Col, Visible) then
+        Text := A.HoverAt(State.LineState[Visible].LogicalLineNum, Col);
+    end;
+    const Target = if FHintText <> '' then FHintText else FPendingText;
+    if Text = Target then
+      Exit;                                       // still over the same mark (or over nothing)
+    HideHint;
+    if Text = '' then
+      Exit;
+    // shown when the mouse rests, below the pointer
+    FPendingText := Text;
+    FPendingPos  := Editor.ClientToScreen(Point(X, Y + 20));
+    FHintEditor  := Editor;
+    FTimer.Interval := 500;
+    FTimer.Enabled  := True;
+  except
+    // as below: nothing raises into the editor
+  end;
+end;
+
+procedure TRulesNotifier.OnMouseDown(const Editor: TWinControl; Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
+begin
+  HideHint;
+end;
+
+procedure TRulesNotifier.OnKeyDown(const Editor: TWinControl; Key: Word; Shift: TShiftState;
+  var Handled: Boolean);
+begin
+  HideHint;
+end;
+
+procedure TRulesNotifier.OnTimer(Sender: TObject);
+begin
+  try
+    const Over = FindVCLWindow(Mouse.CursorPos) = FHintEditor;
+    if FPendingText <> '' then
+    begin
+      const Text = FPendingText;
+      FPendingText := '';
+      if not Over then
+      begin
+        HideHint;
+        Exit;
+      end;
+      var R := FHint.CalcHintRect(Screen.Width div 2, Text, nil);
+      R.Offset(FPendingPos.X, FPendingPos.Y);
+      FHint.ActivateHint(R, Text);
+      FHintText := Text;
+      FTimer.Interval := 250;                     // from now on, watching for the mouse leaving
+    end
+    else if not Over then
+      HideHint;
+  except
+    HideHint;
+  end;
 end;
 
 function TRulesNotifier.AllowedLineStages: TPaintLineStages;
@@ -115,10 +220,11 @@ begin
     if FFiles.TryGetValue(Key, Old) and (Length(Old.Text) = Length(Text)) and
        CompareMem(Pointer(Old.Text), Pointer(Text), Length(Text)) then
       Exit;                                         // unchanged since the rules last ran
+    HideHint;                                       // it showed the text before
     const OldShape = if Old <> nil then Old.Shape else '';
     var New: TAnalysis;
     try
-      New := TAnalysis.Create(Text);
+      New := TAnalysis.Create(Text, View.Buffer.FileName);
     except
       // no marks rather than the old text's marks on the new text's lines
       FFiles.Remove(Key);

@@ -22,6 +22,7 @@ type
   TSpan = record
     Col1, Col2 : Integer;
     Mark       : TMark;
+    Hover      : string;      // shown with the mouse over it: the text a rule writes, or its message
   end;
 
   // a message, written after the end of its line
@@ -36,8 +37,9 @@ type
     Spans : TDictionary<Integer, TArray<TSpan>>;    // by line, from 1
     Notes : TDictionary<Integer, TArray<TNote>>;
     Shape : string;                                   // the spans and notes, to tell a change
-    constructor Create(const AText: TBytes);
+    constructor Create(const AText: TBytes; const FileName: string);
     destructor Destroy; override;
+    function HoverAt(Line, Col: Integer): string;     // '' where nothing is marked
   end;
 
 implementation
@@ -45,9 +47,42 @@ implementation
 uses
   DelphiPP.Engine, DelphiPP.Rules;
 
+type
+  TAddSpan = reference to procedure(Line, Col1, Col2: Integer; Mark: TMark; const Hover: string);
+
+const
+  HoverLines = 30;            // a longer rewrite is cut, with "..."
+
+// what a rule writes, as the hover says it
+function EditHover(const E: TEdit; Insert: Boolean): string;
+begin
+  var New := TEncoding.UTF8.GetString(E.Bytes).Replace(#13#10, #10).Replace(#10, sLineBreak);
+  const Lines = New.Split([sLineBreak]);
+  if Length(Lines) > HoverLines then
+    New := string.Join(sLineBreak, Copy(Lines, 0, HoverLines)) + sLineBreak + '...';
+  if Insert then
+    Exit( E.Rule + ' adds:' + sLineBreak + New );
+  if New = '' then
+    Exit( E.Rule + ' removes this' );
+  Exit( E.Rule + ' writes this as:' + sLineBreak + New );
+end;
+
 { TAnalysis }
 
-constructor TAnalysis.Create(const AText: TBytes);
+function TAnalysis.HoverAt(Line, Col: Integer): string;
+begin
+  Result := '';
+  var List: TArray<TSpan>;
+  if not Spans.TryGetValue(Line, List) then
+    Exit;
+  for var S in List do
+    // an insertion's cell, and the one before it: the caret is drawn between them
+    if (Col >= S.Col1 - Ord(S.Mark = mkInsert)) and (Col < S.Col2) and
+       not Result.Contains(S.Hover) then
+      Result := if Result = '' then S.Hover else Result + sLineBreak + sLineBreak + S.Hover;
+end;
+
+constructor TAnalysis.Create(const AText: TBytes; const FileName: string);
 begin
   inherited Create;
   Text  := AText;
@@ -86,12 +121,13 @@ begin
       Dec(Result);
   end;
 
-  var Add: TProc<Integer, Integer, Integer, TMark> := procedure(Line, Col1, Col2: Integer; Mark: TMark)
+  var Add: TAddSpan := procedure(Line, Col1, Col2: Integer; Mark: TMark; const Hover: string)
   begin
     var S: TSpan;
-    S.Col1 := Col1;
-    S.Col2 := if Col2 > Col1 then Col2 else Col1 + 1;   // an insertion: one cell
-    S.Mark := Mark;
+    S.Col1  := Col1;
+    S.Col2  := if Col2 > Col1 then Col2 else Col1 + 1;  // an insertion: one cell
+    S.Mark  := Mark;
+    S.Hover := Hover;
     var List: TArray<TSpan>;
     Spans.TryGetValue(Line, List);
     Spans.AddOrSetValue(Line, List + [S]);
@@ -115,7 +151,7 @@ begin
     var Edits: TArray<TEdit>;
     var Messages: TArray<TMessage>;
     try
-      Messages := RunWithEdits(Text, Rules, '', Output, Edits);
+      Messages := RunWithEdits(Text, Rules, FileName, Output, Edits);
     except
       // a rule that fails on this text (half typed, say): said, and nothing else shown,
       // rather than the marks of the text before
@@ -135,7 +171,7 @@ begin
       begin
         // text added, not changed: marked at the point it goes in
         const C = ColOf(L1, E.StartByte);
-        Add(L1, C, C, mkInsert);
+        Add(L1, C, C, mkInsert, EditHover(E, True));
         Continue;
       end;
       for var L := L1 to L2 do
@@ -162,7 +198,7 @@ begin
             Break;
           end;
         if B2 > B1 then
-          Add(L, ColOf(L, B1), ColOf(L, B2), mkEdit);
+          Add(L, ColOf(L, B1), ColOf(L, B2), mkEdit, EditHover(E, False));
       end;
     end;
 
@@ -179,7 +215,7 @@ begin
       const Stop = LineEnd(M.Line);
       while (B2 < Stop) and not (Text[B2] in [9, 32]) do
         Inc(B2);
-      Add(M.Line, ColOf(M.Line, B1), ColOf(M.Line, B2), Mark);
+      Add(M.Line, ColOf(M.Line, B1), ColOf(M.Line, B2), Mark, M.Rule + ': ' + M.Text);
       AddNote(M.Line, M.Rule + ': ' + M.Text, Mark);
     end;
   finally
