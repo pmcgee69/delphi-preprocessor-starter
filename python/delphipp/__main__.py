@@ -96,7 +96,11 @@ def main(argv=None):
             errors += m.level == 'error'
         changed += out != raw
         name = generated(f)
-        if name is not None:
+        if name is not None and any(m.level == 'error' for m in messages):
+            # a rule's error: no .pas, the last good one stays, so nothing half rewritten is
+            # left for the IDE to open or Code Insight to read (the user, 6 Nov, found one)
+            pass
+        elif name is not None:
             # its .pas, beside it or under OUT, written only when it differs, so the IDE
             # doesn't see a change on disk where there is none
             out = HEADER.sub(rb'\1\2\3', out, count=1)
