@@ -1,0 +1,1 @@
+377-468 [case-of] // #13#10 is two characters: a string case\n  if s = #13#10 then\n    x := 7;

@@ -1,0 +1,2 @@
+158-316 [case-of] if (s = 'hello') or (s = 'hi') then\n    Result := 1\n  else if s = sWorld then\n    begin Result := 3; end\n  else\n    begin\n      Writeln('  (no match for ', s, ')');\n      Result := 0\n    end;
+389-498 [case-of] if x.ClassType = TStringList then\n    Result := 'a string list'\n  else if x.ClassType = TList then\n    Result := 'a list';

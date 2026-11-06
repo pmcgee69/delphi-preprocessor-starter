@@ -85,6 +85,11 @@ type
 function Run(const Source: TBytes; const Rules: TArray<TRule>; const FileName: string;
              out Output: TBytes): TArray<TMessage>;
 
+// as Run, and the edits applied, in source order, for a tool to show or map lines
+// through (an editor underlining what the rules change): none if they overlapped
+function RunWithEdits(const Source: TBytes; const Rules: TArray<TRule>; const FileName: string;
+                      out Output: TBytes; out Edits: TArray<TEdit>): TArray<TMessage>;
+
 // the file's tree as text, a node a line, indented by depth: each node's Kind
 // (what a rule's Kinds lists), its line, and a leaf's text. The first step of
 // writing a rule: find the kind of node it is about (delphipp --tree FILE)
@@ -312,6 +317,14 @@ end;
 
 function Run(const Source: TBytes; const Rules: TArray<TRule>; const FileName: string;
              out Output: TBytes): TArray<TMessage>;
+var
+  Edits: TArray<TEdit>;
+begin
+  Exit( RunWithEdits(Source, Rules, FileName, Output, Edits) );
+end;
+
+function RunWithEdits(const Source: TBytes; const Rules: TArray<TRule>; const FileName: string;
+                      out Output: TBytes; out Edits: TArray<TEdit>): TArray<TMessage>;
 begin
   var Encoding := SourceEncoding(Source);
   var Parser   := ts_parser_new;
@@ -358,15 +371,26 @@ begin
       ts_tree_delete(Tree);
     end;
 
-    // the edits, all at once, from the end back; two that overlap: none
-    var Edits := Ctx.FEdits.ToArray;
-    TArray.Sort<TEdit>(Edits, TComparer<TEdit>.Construct(
-      function(const A, B: TEdit): Integer
+    // the edits, all at once, from the end back; two that overlap: none. Two at one
+    // place (an insert after one node and before the next) in the order they were
+    // proposed, as Python's sort keeps them: by index last, as the messages below
+    var Proposed := Ctx.FEdits.ToArray;
+    var EditOrder: TArray<Integer>;
+    SetLength(EditOrder, Length(Proposed));
+    for var I := 0 to High(EditOrder) do
+      EditOrder[I] := I;
+    TArray.Sort<Integer>(EditOrder, TComparer<Integer>.Construct(
+      function(const A, B: Integer): Integer
       begin
-        Result := A.StartByte - B.StartByte;
+        Result := Proposed[A].StartByte - Proposed[B].StartByte;
         if Result = 0 then
-          Result := A.EndByte - B.EndByte;
+          Result := Proposed[A].EndByte - Proposed[B].EndByte;
+        if Result = 0 then
+          Result := A - B;
       end));
+    SetLength(Edits, Length(Proposed));
+    for var I := 0 to High(EditOrder) do
+      Edits[I] := Proposed[EditOrder[I]];
     var Overlap := False;
     for var I := 1 to High(Edits) do
       if Edits[I].StartByte < Edits[I - 1].EndByte then
@@ -386,7 +410,9 @@ begin
         Break;
       end;
     Output := Copy(Source);
-    if not Overlap then
+    if Overlap then
+      Edits := nil
+    else
       for var I := High(Edits) downto 0 do
         Output := Copy(Output, 0, Edits[I].StartByte) + Edits[I].Bytes +
                   Copy(Output, Edits[I].EndByte, Length(Output) - Edits[I].EndByte);

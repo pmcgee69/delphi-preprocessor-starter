@@ -7,6 +7,9 @@ program RunTests;
     <name>.out.pas    the output expected, when the rule changes the file
                       (none: the output must be the input, byte for byte)
     <name>.diag       the messages expected (none: no messages)
+    <name>.edits      the edits expected, a line each: start-end [rule] new text, with
+                      backslash, CR, LF and tab written \\ \r \n \t (none: no edits).
+                      What an editor shows of a rule: both engines must agree on it
 
     RunTests [CASES FOLDER] [--update]
 
@@ -24,6 +27,14 @@ uses
 function Same(const A, B: TBytes): Boolean;
 begin
   Exit( (Length(A) = Length(B)) and CompareMem(Pointer(A), Pointer(B), Length(A)) );
+end;
+
+// an edit as a .edits line (the tests are UTF-8, so its text is read as that)
+function EditLine(const E: TEdit): string;
+begin
+  const Text = TEncoding.UTF8.GetString(E.Bytes)
+                 .Replace('\', '\\').Replace(#13, '\r').Replace(#10, '\n').Replace(#9, '\t');
+  Exit( Format('%d-%d [%s] %s', [E.StartByte, E.EndByte, E.Rule, Text]) + #10 );
 end;
 
 var
@@ -59,17 +70,24 @@ begin
         Inc(Total);
         const Source = TFile.ReadAllBytes(F);
         var Output: TBytes;
+        var Applied: TArray<TEdit>;
         var Diag := '';
-        for var M in Run(Source, Rules, F, Output) do
+        for var M in RunWithEdits(Source, Rules, F, Output, Applied) do
           Diag := Diag + M.ToString + #10;
-        const OutFile  = ChangeFileExt(F, '.out.pas');
-        const DiagFile = ChangeFileExt(F, '.diag');
+        var Edits := '';
+        for var E in Applied do
+          Edits := Edits + EditLine(E);
+        const OutFile   = ChangeFileExt(F, '.out.pas');
+        const DiagFile  = ChangeFileExt(F, '.diag');
+        const EditsFile = ChangeFileExt(F, '.edits');
         if Update then
         begin
           if not Same(Output, Source) then TFile.WriteAllBytes(OutFile, Output)
           else if TFile.Exists(OutFile) then TFile.Delete(OutFile);
           if Diag <> '' then TFile.WriteAllBytes(DiagFile, TEncoding.UTF8.GetBytes(Diag))
           else if TFile.Exists(DiagFile) then TFile.Delete(DiagFile);
+          if Edits <> '' then TFile.WriteAllBytes(EditsFile, TEncoding.UTF8.GetBytes(Edits))
+          else if TFile.Exists(EditsFile) then TFile.Delete(EditsFile);
         end;
         var Expected := Source;
         if TFile.Exists(OutFile) then
@@ -77,6 +95,9 @@ begin
         var ExpectedDiag := '';
         if TFile.Exists(DiagFile) then
           ExpectedDiag := TEncoding.UTF8.GetString(TFile.ReadAllBytes(DiagFile));
+        var ExpectedEdits := '';
+        if TFile.Exists(EditsFile) then
+          ExpectedEdits := TEncoding.UTF8.GetString(TFile.ReadAllBytes(EditsFile));
         var Problems := '';
         if not Same(Output, Expected) then
           Problems := Problems + #13#10'      the output differs from ' +
@@ -84,6 +105,9 @@ begin
         if Diag <> ExpectedDiag then
           Problems := Problems + #13#10'      the messages differ from ' +
             (if TFile.Exists(DiagFile) then ExtractFileName(DiagFile) else 'none');
+        if Edits <> ExpectedEdits then
+          Problems := Problems + #13#10'      the edits differ from ' +
+            (if TFile.Exists(EditsFile) then ExtractFileName(EditsFile) else 'none');
         if Problems <> '' then
           Inc(Failed);
         Writeln((if Problems = '' then 'ok  ' else 'FAIL'), '  ',

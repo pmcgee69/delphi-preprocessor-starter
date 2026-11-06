@@ -1,0 +1,3 @@
+98-98 [auto-property] private\n    FName: string;\n    FAge: Integer;\n  
+130-130 [auto-property]  read FName write FName
+157-157 [auto-property]  read FAge write FAge

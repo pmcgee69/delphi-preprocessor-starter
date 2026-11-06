@@ -1,0 +1,3 @@
+71-78 [double-quotes] '''abc'''
+93-103 [double-quotes] 'say ''hi'''
+118-145 [double-quotes] 'say ''hi'''#13#10'and ''bye'''

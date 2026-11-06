@@ -1,0 +1,4 @@
+332-332 [assert-message] , 'basic.pas:20: Count > 0'
+385-385 [assert-message] , 'basic.pas:22: Ok'
+413-413 [assert-message] , 'basic.pas:23: Count < 100'
+447-447 [assert-message] , 'basic.pas:25: X.ClassName <> ''it''''s'''

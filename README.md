@@ -197,7 +197,8 @@ class WithStatement:
 2. **Write the rule** in `python\delphipp\rules\`, and add it to `ALL` in `rules\__init__.py`.
 3. **Test it.** Put inputs in `tests\cases\<rule name>\`, run
    `python python\tests\run.py --update` to write what the rule does now (`.out.pas` when it
-   changes the file, `.diag` for its messages), read them, and keep them. From then on
+   changes the file, `.diag` for its messages, `.edits` for the ranges it replaces, which is
+   what an editor shows), read them, and keep them. From then on
    `python python\tests\run.py` checks the rule still does exactly that.
 4. **Run it over real code** with `tools\survey.py`, and read what it changed before you let it
    change anything that matters. A rewrite should compile: try the output with dcc64.
