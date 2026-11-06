@@ -27,9 +27,11 @@ The IDE then opens a `.dpps` file as Delphi, highlighted, and keeps the setting 
 
 ## How the two files fit in the project
 
-- **`Greet.dpps`, the source**, is opened with *File > Open*. It isn't in the Project Manager:
-  `Hello.dpr` doesn't use it, so dcc never compiles it, and the IDE keeps in a project only the
-  units the program uses. The build finds it by the pre-build event.
+- **`Greet.dpps`, the source**, is in the project as a file the IDE doesn't compile (in
+  `Hello.dproj`, `<None Include="Greet.dpps"/>`), so it's in the Project Manager, to open from
+  there. `Hello.dpr` doesn't use it, so dcc never sees it; the build reads it through the
+  pre-build event. (A `.pas` the program doesn't use can't stay like this: the IDE drops it from
+  the project when it saves. Hence `.dpps`.)
 - **`Greet.pas`, the output**, is what `Hello.dpr` uses: `uses Greet in 'Greet.pas';`. It
   needn't exist before a build, and isn't in the repository: the pre-build event writes it, then
   dcc compiles it. Until the first build the Project Manager shows it as missing.
@@ -37,7 +39,8 @@ The IDE then opens a `.dpps` file as Delphi, highlighted, and keeps the setting 
   file from its editor, not from disk, and the next build replaces it anyway.
 
 (The source may also be called `Greet.dpps.pas`, with `unit Greet.dpps;`, which the IDE
-highlights without the setting above; `Greet.pas` is written with `unit Greet;`.)
+highlights without the setting above, but which it won't keep in the project; `Greet.pas` is
+written with `unit Greet;`.)
 
 ## Try it
 

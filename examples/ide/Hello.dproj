@@ -64,6 +64,7 @@ python -m delphipp --msbuild "$(MSBuildProjectDirectory)\Greet.dpps"]]></PreBuil
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="Greet.pas"/>
+        <None Include="Greet.dpps"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
