@@ -6,6 +6,7 @@
     python -m delphipp --list                       the rules there are
     python -m delphipp --tree FILE                  the file's tree: the node types a rule sees
     python -m delphipp X.dpps                       write X.pas beside it, rewritten
+    python -m delphipp X.dpps.pas                   the same, from a source the IDE highlights
     python -m delphipp --msbuild ...                messages as MSBuild reads them, for the IDE
 
 Run from the python folder (or put it on PYTHONPATH). Exit status 1 when a
@@ -16,9 +17,14 @@ written from it, every time, so a project's pre-build event can run this and the
 .pas as usual (examples/ide/). With --msbuild, each message is `file(line,col): warning
 DPPS-rule: text`, which MSBuild's Exec, and so the IDE's Messages pane, lists as a warning or
 error; a hint is printed plain.
+
+The source may be named X.dpps.pas instead, so the IDE highlights it as Delphi and it can sit in
+the project without the program using it: its header then names it as its file does,
+`unit X.dpps;`, and X.pas is written with `unit X;`.
 """
 import argparse
 import pathlib
+import re
 import sys
 
 from . import engine, rules
@@ -32,6 +38,20 @@ def shown(f, m, msbuild: bool) -> str:
     if msbuild and m.level in ('error', 'warning'):
         return f"{f.resolve()}({m.line},{m.col}): {m.level} DPPS-{m.rule}: {m.text}"
     return f"{f}:{m}"
+
+
+def generated(f: pathlib.Path) -> str | None:
+    """The name of the .pas a source is written to: X.pas for X.dpps or X.dpps.pas, else None."""
+    low = f.name.lower()
+    for suffix in ('.dpps.pas', '.dpps'):
+        if low.endswith(suffix):
+            return f.name[:-len(suffix)] + '.pas'
+    return None
+
+
+# `unit X.dpps;` as X.dpps.pas must name itself: in X.pas, `unit X;` (after a UTF-8 BOM too,
+# which the IDE may write)
+HEADER = re.compile(rb'(?im)^((?:\xef\xbb\xbf)?\s*(?:unit|program|library)\s+)([\w.]+?)\.dpps(\s*;)')
 
 
 def files(paths):
@@ -75,10 +95,12 @@ def main(argv=None):
             print(shown(f, m, a.msbuild))
             errors += m.level == 'error'
         changed += out != raw
-        if f.suffix.lower() == '.dpps':
+        name = generated(f)
+        if name is not None:
             # its .pas, beside it or under OUT, written only when it differs, so the IDE
             # doesn't see a change on disk where there is none
-            dest = (pathlib.Path(a.out) / f.name if a.out else f).with_suffix('.pas')
+            out = HEADER.sub(rb'\1\2\3', out, count=1)
+            dest = (pathlib.Path(a.out) if a.out else f.parent) / name
             dest.parent.mkdir(parents=True, exist_ok=True)
             if not dest.exists() or dest.read_bytes() != out:
                 dest.write_bytes(out)
