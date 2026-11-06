@@ -18,9 +18,8 @@ written from it, every time, so a project's pre-build event can run this and the
 DPPS-rule: text`, which MSBuild's Exec, and so the IDE's Messages pane, lists as a warning or
 error; a hint is printed plain.
 
-The source may be named X.dpps.pas instead, so the IDE highlights it as Delphi and it can sit in
-the project without the program using it: its header then names it as its file does,
-`unit X.dpps;`, and X.pas is written with `unit X;`.
+The source may be named X.dpps.pas instead, so the IDE highlights it as Delphi: its header then
+names it as its file does, `unit X.dpps;`, and X.pas is written with `unit X;`.
 """
 import argparse
 import pathlib

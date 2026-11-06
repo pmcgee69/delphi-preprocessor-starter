@@ -14,12 +14,14 @@ Here two rules make a unit dcc would refuse into one it compiles:
 
 ## How the two files fit in the project
 
-- **`Greet.dpps.pas`, the source**, is in the project, so the IDE opens it from the Project
-  Manager and highlights it as Delphi. Its header names it as its file does, `unit Greet.dpps;`,
-  as Delphi wants. `Hello.dpr` doesn't use it, so dcc never compiles it.
+- **`Greet.dpps.pas`, the source**, is opened with *File > Open*; the IDE highlights it as Delphi,
+  since its name ends in `.pas`. Its header names it as its file does, `unit Greet.dpps;`, as
+  Delphi wants. It isn't in the Project Manager: `Hello.dpr` doesn't use it, so dcc never
+  compiles it, and the IDE keeps in a project only the units the program uses (added by hand,
+  it is gone when the project is opened again). The build finds it by the pre-build event.
 - **`Greet.pas`, the output**, is what `Hello.dpr` uses: `uses Greet in 'Greet.pas';`. It
   needn't exist before a build, and isn't in the repository: the pre-build event writes it, then
-  dcc compiles it. Until the first build the Project Manager may show it as missing.
+  dcc compiles it. Until the first build the Project Manager shows it as missing.
 - **Edit the source, never `Greet.pas`**, and keep `Greet.pas` closed: the IDE compiles an open
   file from its editor, not from disk, and the next build replaces it anyway.
 
