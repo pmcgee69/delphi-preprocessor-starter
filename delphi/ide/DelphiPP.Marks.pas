@@ -145,8 +145,24 @@ begin
         if L > L1 then
           while (B1 < LineEnd(L)) and (Text[B1] in [9, 32]) do
             Inc(B1);
-        const B2 = if L = L2 then E.EndByte else LineEnd(L);
-        Add(L, ColOf(L, B1), ColOf(L, B2), mkEdit);
+        var B2 := if L = L2 then E.EndByte else LineEnd(L);
+        // not under a // comment at the end of the line: the rule only moves it
+        var InQuote := False;
+        for var B := Starts[L - 1] to B2 - 2 do
+          if Text[B] = Ord('''') then
+            InQuote := not InQuote
+          else if not InQuote and (Text[B] = Ord('/')) and (Text[B + 1] = Ord('/')) then
+          begin
+            if B >= B1 then
+            begin
+              B2 := B;
+              while (B2 > B1) and (Text[B2 - 1] in [9, 32]) do
+                Dec(B2);
+            end;
+            Break;
+          end;
+        if B2 > B1 then
+          Add(L, ColOf(L, B1), ColOf(L, B2), mkEdit);
       end;
     end;
 
