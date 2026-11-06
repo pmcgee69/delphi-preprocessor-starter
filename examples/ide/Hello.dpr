@@ -3,7 +3,7 @@ program Hello;
 {$APPTYPE CONSOLE}
 
 uses
-  Greet in 'Greet.pas';    // written from Greet.dpps.pas by the pre-build event
+  Greet in 'Greet.pas';    // written from Greet.dpps by the pre-build event
 
 var
   G: TGreeting;

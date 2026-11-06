@@ -28,10 +28,10 @@ Zed runs the Python rules; the Delphi ones run from the command line (below).
 
 ## In the Delphi IDE
 
-**A `.dpps.pas` file is Delphi source the rules rewrite before dcc sees it.** The IDE opens it
-highlighted as Delphi, and a pre-build event writes the `.pas` the program uses from it
-(`X.dpps.pas` gives `X.pas`); the IDE builds as usual, and a rule's errors and warnings are in
-the Messages pane, on the source's line. No package to install: a project setting.
+**A `.dpps` file is Delphi source the rules rewrite before dcc sees it.** A pre-build event
+writes the `.pas` the program uses from it (`X.dpps` gives `X.pas`); the IDE builds as usual,
+and a rule's errors and warnings are in the Messages pane, on the source's line. No package to
+install: a project setting, and one editor setting so the IDE highlights `.dpps` as Delphi.
 [`examples\ide\`](examples/ide/) is a project to open and build, with a `case` on strings that
 the rules make into Delphi dcc accepts.
 

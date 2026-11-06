@@ -1,32 +1,37 @@
-# The rules in the Delphi IDE: a `.dpps.pas` source and a pre-build event
+# The rules in the Delphi IDE: a `.dpps` source and a pre-build event
 
-`Greet.dpps.pas` is Delphi source the rules rewrite before dcc sees it. Before every build, the
+`Greet.dpps` is Delphi source the rules rewrite before dcc sees it. Before every build, the
 project's pre-build event runs them and writes `Greet.pas` beside it; the IDE then builds as
 usual. No IDE package, nothing installed: a project setting.
 
 Here two rules make a unit dcc would refuse into one it compiles:
 
-| In `Greet.dpps.pas` | In `Greet.pas`, written from it |
+| In `Greet.dpps` | In `Greet.pas`, written from it |
 |---|---|
-| `unit Greet.dpps;` | `unit Greet;` |
 | `case G.Lang of 'en': … 'fr': …` (a `case` on strings) | an `if` chain (`case-of`) |
-| `Assert(G.Times > 0)` | `Assert(G.Times > 0, 'Greet.dpps.pas:24: G.Times > 0')` (`assert-message`) |
+| `Assert(G.Times > 0)` | `Assert(G.Times > 0, 'Greet.dpps:24: G.Times > 0')` (`assert-message`) |
+
+## Highlighting `.dpps` in the IDE
+
+Once per machine: *Tools > Options > User Interface > Editor > Language*, choose **Delphi**, and
+add `;dpps` to its file extensions (`pas;dpr;dpk;inc;…`). The IDE then opens a `.dpps` file as
+Delphi, highlighted. (It keeps the list in the registry, under
+`HKCU\Software\Embarcadero\BDS\37.0\Editor\Source Options\Borland.EditOptions.Pascal`,
+`File Extensions`.)
 
 ## How the two files fit in the project
 
-- **`Greet.dpps.pas`, the source**, is opened with *File > Open*; the IDE highlights it as Delphi,
-  since its name ends in `.pas`. Its header names it as its file does, `unit Greet.dpps;`, as
-  Delphi wants. It isn't in the Project Manager: `Hello.dpr` doesn't use it, so dcc never
-  compiles it, and the IDE keeps in a project only the units the program uses (added by hand,
-  it is gone when the project is opened again). The build finds it by the pre-build event.
+- **`Greet.dpps`, the source**, is opened with *File > Open*. It isn't in the Project Manager:
+  `Hello.dpr` doesn't use it, so dcc never compiles it, and the IDE keeps in a project only the
+  units the program uses. The build finds it by the pre-build event.
 - **`Greet.pas`, the output**, is what `Hello.dpr` uses: `uses Greet in 'Greet.pas';`. It
   needn't exist before a build, and isn't in the repository: the pre-build event writes it, then
   dcc compiles it. Until the first build the Project Manager shows it as missing.
 - **Edit the source, never `Greet.pas`**, and keep `Greet.pas` closed: the IDE compiles an open
   file from its editor, not from disk, and the next build replaces it anyway.
 
-(The source may also be called `Greet.dpps`, with `unit Greet;`: the same, but the IDE opens it
-as plain text.)
+(The source may also be called `Greet.dpps.pas`, with `unit Greet.dpps;`, which the IDE
+highlights without the setting above; `Greet.pas` is written with `unit Greet;`.)
 
 ## Try it
 
@@ -34,15 +39,16 @@ Needs Python and the grammar, as in the main README's *With Python* (`get-gramma
 
 1. Open `Hello.dproj` in Delphi 13 and build it (Win32 or Win64). `Greet.pas` appears; the
    program prints `Bonjour, Delphi! Bonjour, Delphi!` and `G'day, Delphi!`.
-2. Edit `Greet.dpps.pas`: the next build writes `Greet.pas` again.
+2. Edit `Greet.dpps`: the next build writes `Greet.pas` again.
 3. Give the `case` a range label, `'a'..'c': Hello := 'Hm';`. The build stops before dcc, and the
-   Messages pane lists the rule's error on `Greet.dpps.pas`, line and column:
+   Messages pane lists the rule's error on `Greet.dpps`, line and column:
 
    ```
-   Greet.dpps.pas(30,5): error DPPS-case-of: a range label in a case on strings or class types: write it as an if
+   Greet.dpps(30,5): error DPPS-case-of: a range label in a case on strings or class types: write it as an if
    ```
 
-   MSBuild adds a line of its own after it, that the command "exited with code 1".
+   MSBuild adds a line of its own after it, that the command "exited with code 1". `Greet.pas`
+   is left as it was.
 
 The same from the command line, in a RAD Studio Command Prompt:
 
@@ -57,7 +63,7 @@ msbuild Hello.dproj /p:Platform=Win64
 
 ```
 set PYTHONPATH=$(MSBuildProjectDirectory)\..\..\python
-python -m delphipp --msbuild "$(MSBuildProjectDirectory)\Greet.dpps.pas"
+python -m delphipp --msbuild "$(MSBuildProjectDirectory)\Greet.dpps"
 ```
 
 - `--msbuild` writes each warning and error as `file(line,col): error DPPS-rule: text`, which

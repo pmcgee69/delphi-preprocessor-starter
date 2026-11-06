@@ -39,11 +39,11 @@
         <DCC_Namespace>System;$(DCC_Namespace)</DCC_Namespace>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
         <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
-        <!-- The rules write Greet.pas from Greet.dpps.pas before every build. PYTHONPATH finds the
+        <!-- The rules write Greet.pas from Greet.dpps before every build. PYTHONPATH finds the
              starter's python folder from here; python is the one on the PATH. A rule's error
              fails the build; its warnings and errors are listed in the Messages pane. -->
         <PreBuildEvent><![CDATA[set PYTHONPATH=$(MSBuildProjectDirectory)\..\..\python
-python -m delphipp --msbuild "$(MSBuildProjectDirectory)\Greet.dpps.pas"]]></PreBuildEvent>
+python -m delphipp --msbuild "$(MSBuildProjectDirectory)\Greet.dpps"]]></PreBuildEvent>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
         <DCC_Namespace>Winapi;System.Win;$(DCC_Namespace)</DCC_Namespace>
