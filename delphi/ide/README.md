@@ -4,7 +4,10 @@
 rules do, as you type, as Zed does.
 
 - **What a rule would change** is underlined with a dotted line: the `case` on strings that
-  `case-of` writes as an `if` chain, the place `assert-message` adds its text.
+  `case-of` writes as an `if` chain. **Where a rule adds text** has a small solid caret: the
+  place `assert-message` adds its text.
+- **A rule that fails** on the text (half typed, say) is said after line 1, and nothing else is
+  shown until the text is one it can read.
 - **A rule's error, warning or hint** has a wavy underline where it is (red, amber or grey), and
   its text in italics after the end of the line, as
   `case-of: a range label in a case on strings or class types: write it as an if`.
@@ -50,7 +53,7 @@ bin\test\MarksTest.exe ..\..\examples\ide\Greet.dpps
 
 ```
   24    Assert(G.Times > 0);            // assert-message: gains its text, file and line
-                          .
+                          ^
   26    case G.Lang of                  // case-of: a case on strings, which dcc refuses, as an if chain
         ................................................................................................
   27      'en': Hello := 'Hello';

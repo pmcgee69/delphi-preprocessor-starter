@@ -16,7 +16,7 @@ const
   ShownRules = 'assert-message,uses-merge,case-of,auto-property,double-quotes';
 
 type
-  TMark = (mkEdit, mkError, mkWarning, mkHint);
+  TMark = (mkEdit, mkInsert, mkError, mkWarning, mkHint);   // mkInsert: text added at Col1
 
   // a stretch of one line to underline, in the editor's columns (from 1; Col2 past the end)
   TSpan = record
@@ -98,17 +98,46 @@ begin
     Shape := Shape + Format('%d:%d-%d:%d;', [Line, S.Col1, S.Col2, Ord(Mark)]);
   end;
 
+  var AddNote: TProc<Integer, string, TMark> := procedure(Line: Integer; NoteText: string; Mark: TMark)
+  begin
+    var N: TNote;
+    N.Text := NoteText;
+    N.Mark := Mark;
+    var List: TArray<TNote>;
+    Notes.TryGetValue(Line, List);
+    Notes.AddOrSetValue(Line, List + [N]);
+    Shape := Shape + Format('%d:%s;', [Line, N.Text]);
+  end;
+
   const Rules = RulesNamed(ShownRules);
   try
     var Output: TBytes;
     var Edits: TArray<TEdit>;
-    const Messages = RunWithEdits(Text, Rules, '', Output, Edits);
+    var Messages: TArray<TMessage>;
+    try
+      Messages := RunWithEdits(Text, Rules, '', Output, Edits);
+    except
+      // a rule that fails on this text (half typed, say): said, and nothing else shown,
+      // rather than the marks of the text before
+      on E: Exception do
+      begin
+        AddNote(1, 'delphipp: a rule failed on this text: ' + E.Message, mkError);
+        Exit;
+      end;
+    end;
 
     // each edit, line by line over the lines it spans
     for var E in Edits do
     begin
       const L1 = LineOf(E.StartByte);
       const L2 = LineOf(E.EndByte);
+      if E.StartByte = E.EndByte then
+      begin
+        // text added, not changed: marked at the point it goes in
+        const C = ColOf(L1, E.StartByte);
+        Add(L1, C, C, mkInsert);
+        Continue;
+      end;
       for var L := L1 to L2 do
       begin
         // a line inside the range: from its first character, not its indent
@@ -135,13 +164,7 @@ begin
       while (B2 < Stop) and not (Text[B2] in [9, 32]) do
         Inc(B2);
       Add(M.Line, ColOf(M.Line, B1), ColOf(M.Line, B2), Mark);
-      var N: TNote;
-      N.Text := M.Rule + ': ' + M.Text;
-      N.Mark := Mark;
-      var List: TArray<TNote>;
-      Notes.TryGetValue(M.Line, List);
-      Notes.AddOrSetValue(M.Line, List + [N]);
-      Shape := Shape + Format('%d:%s;', [M.Line, N.Text]);
+      AddNote(M.Line, M.Rule + ': ' + M.Text, Mark);
     end;
   finally
     for var R in Rules do

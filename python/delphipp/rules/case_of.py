@@ -115,7 +115,11 @@ class CaseOf:
                 test = tests[0] if len(tests) == 1 else '(' + ') or ('.join(tests) + ')'
                 if not first:
                     code += nl + indent + 'else '
-                code += f'if {test} then' + nl + indent + '  ' + statement_text(c.children[1], ctx)
+                code += f'if {test} then'
+                # an arm with no statement (`1 :`, which Delphi allows) has an empty then
+                statement = statement_text(c.children[1], ctx) if len(c.children) > 1 else ''
+                if statement:
+                    code += nl + indent + '  ' + statement
                 first = False
             elif c.type == 'kElse':
                 statements = []

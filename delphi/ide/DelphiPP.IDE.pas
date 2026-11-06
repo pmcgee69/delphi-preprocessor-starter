@@ -23,7 +23,7 @@ procedure Register;
 implementation
 
 uses
-  System.SysUtils, System.Types, System.Classes, System.Generics.Collections,
+  System.SysUtils, System.Types, System.Classes, System.Math, System.Generics.Collections,
   Vcl.Controls, Vcl.Graphics,
   ToolsAPI, ToolsAPI.Editor,
   DelphiPP.Marks;
@@ -116,7 +116,15 @@ begin
        CompareMem(Pointer(Old.Text), Pointer(Text), Length(Text)) then
       Exit;                                         // unchanged since the rules last ran
     const OldShape = if Old <> nil then Old.Shape else '';
-    const New = TAnalysis.Create(Text);
+    var New: TAnalysis;
+    try
+      New := TAnalysis.Create(Text);
+    except
+      // no marks rather than the old text's marks on the new text's lines
+      FFiles.Remove(Key);
+      Services.InvalidateEditor(Editor);
+      raise;
+    end;
     FFiles.AddOrSetValue(Key, New);
     // a change on one line can move marks on others (an edit over several lines): the
     // whole editor again, once, when what is shown has changed
@@ -153,6 +161,7 @@ begin
     const PenStyle = Canvas.Pen.Style;
     const PenWidth = Canvas.Pen.Width;
     const BrushStyle = Canvas.Brush.Style;
+    const BrushColor = Canvas.Brush.Color;
     const FontColor = Canvas.Font.Color;
     const FontStyle = Canvas.Font.Style;
     try
@@ -175,6 +184,17 @@ begin
                 Canvas.LineTo(X + 2, Y);
                 Inc(X, 4);
               end;
+            end;
+          mkInsert:
+            begin
+              // a caret under the point text goes in, solid: a few dots in one cell were
+              // too faint (user, 7 Nov: "the assert visibility is not helped by being a
+              // dotted line")
+              const H = Max(4, Cell.cy div 4);
+              Canvas.Pen.Color   := EditColor;
+              Canvas.Brush.Color := EditColor;
+              Canvas.Brush.Style := bsSolid;
+              Canvas.Polygon([Point(X1 - H, Y), Point(X1 + H, Y), Point(X1, Y - H - 1)]);
             end;
         else
           begin
@@ -217,6 +237,7 @@ begin
       Canvas.Pen.Style   := PenStyle;
       Canvas.Pen.Width   := PenWidth;
       Canvas.Brush.Style := BrushStyle;
+      Canvas.Brush.Color := BrushColor;
       Canvas.Font.Color  := FontColor;
       Canvas.Font.Style  := FontStyle;
     end;

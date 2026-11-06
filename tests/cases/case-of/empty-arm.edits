@@ -1,0 +1,1 @@
+271-366 [case-of] if s = 'skip' then\n  else if s = 'one' then\n    Result := 1\n  else if s = 'none' then\n  else\n    Result := -1;

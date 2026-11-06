@@ -1,7 +1,8 @@
 program MarksTest;
 
 { What the IDE package would show of a file, as text: each line with a mark,
-  the stretches underlined beneath it (. a rule changes this, ~ a message), and
+  the stretches underlined beneath it (. a rule changes this, ^ adds text here,
+  ~ a message), and
   the messages after it. The package's TAnalysis, without the IDE.
 
     MarksTest FILE }
@@ -34,7 +35,7 @@ begin
           begin
             while Length(Under) < C do
               Under := Under + ' ';
-            Under[C] := if S.Mark = mkEdit then '.' else '~';
+            Under[C] := if S.Mark = mkEdit then '.' else if S.Mark = mkInsert then '^' else '~';
           end;
         Writeln('      ', Under.TrimRight);
         for var N in Notes do

@@ -227,8 +227,13 @@ begin
         Test := '(' + string.Join(') or (', Tests) + ')';
       if not First then
         Code := Code + LineBreak + Indent + 'else ';
-      Code  := Code + 'if ' + Test + ' then' + LineBreak + Indent + '  ' +
-               StatementText(C.Child(1), Ctx);
+      Code  := Code + 'if ' + Test + ' then';
+      // an arm with no statement (`1 :`, which Delphi allows) has an empty then
+      var Statement := '';
+      if C.ChildCount > 1 then
+        Statement := StatementText(C.Child(1), Ctx);
+      if Statement <> '' then
+        Code := Code + LineBreak + Indent + '  ' + Statement;
       First := False;
     end
     else if C.Kind = 'kElse' then
