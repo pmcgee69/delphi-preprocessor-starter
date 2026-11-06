@@ -13,13 +13,17 @@ Here two rules make a unit dcc would refuse into one it compiles:
 
 ## Highlighting `.dpps` in the IDE
 
-Once per machine: *Tools > Options > Editor > Language*, choose **Delphi**, and add `;dpps` to
-its file extensions (`pas;dpr;dpk;inc;…`). The IDE then opens a `.dpps` file as Delphi,
-highlighted. (Not *IDE > File Association*, which is what Windows opens with the IDE.) The list
-is kept in the registry, under
-`HKCU\Software\Embarcadero\BDS\37.0\Editor\Source Options\Borland.EditOptions.Pascal`,
-`File Extensions`; edit it there only with the IDE closed, since the IDE writes its options
-back when it closes.
+Once per machine, add `dpps` to the extensions the IDE reads as Delphi. Delphi 13's Options
+dialog doesn't show that list (nor is it *IDE > File Association*, which is what Windows opens
+with the IDE), so it's done in the registry. **Close the IDE first**, since it writes its options
+back when it closes; then, in PowerShell:
+
+```
+$k = "HKCU:\Software\Embarcadero\BDS\37.0\Editor\Source Options\Borland.EditOptions.Pascal"
+Set-ItemProperty $k "File Extensions" ((Get-ItemProperty $k)."File Extensions" + ";dpps")
+```
+
+The IDE then opens a `.dpps` file as Delphi, highlighted, and keeps the setting from then on.
 
 ## How the two files fit in the project
 
