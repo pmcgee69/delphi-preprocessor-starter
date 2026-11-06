@@ -12,6 +12,8 @@ examples/ide/Greet.pas
 examples/ide/Hello.res
 examples/ide/Win32/
 examples/ide/Win64/
+examples/ide/__history/
+examples/ide/__recovery/
 *.dproj.local
 *.identcache
 *.delphilsp.json

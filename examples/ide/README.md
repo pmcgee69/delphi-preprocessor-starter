@@ -1,15 +1,30 @@
-# The rules in the Delphi IDE: a `.dpps` file and a pre-build event
+# The rules in the Delphi IDE: a `.dpps.pas` source and a pre-build event
 
-`Greet.dpps` is Delphi source the rules rewrite before dcc sees it. Before every build, the
+`Greet.dpps.pas` is Delphi source the rules rewrite before dcc sees it. Before every build, the
 project's pre-build event runs them and writes `Greet.pas` beside it; the IDE then builds as
 usual. No IDE package, nothing installed: a project setting.
 
 Here two rules make a unit dcc would refuse into one it compiles:
 
-| In `Greet.dpps` | In `Greet.pas`, written from it |
+| In `Greet.dpps.pas` | In `Greet.pas`, written from it |
 |---|---|
+| `unit Greet.dpps;` | `unit Greet;` |
 | `case G.Lang of 'en': … 'fr': …` (a `case` on strings) | an `if` chain (`case-of`) |
-| `Assert(G.Times > 0)` | `Assert(G.Times > 0, 'Greet.dpps:24: G.Times > 0')` (`assert-message`) |
+| `Assert(G.Times > 0)` | `Assert(G.Times > 0, 'Greet.dpps.pas:24: G.Times > 0')` (`assert-message`) |
+
+## How the two files fit in the project
+
+- **`Greet.dpps.pas`, the source**, is in the project, so the IDE opens it from the Project
+  Manager and highlights it as Delphi. Its header names it as its file does, `unit Greet.dpps;`,
+  as Delphi wants. `Hello.dpr` doesn't use it, so dcc never compiles it.
+- **`Greet.pas`, the output**, is what `Hello.dpr` uses: `uses Greet in 'Greet.pas';`. It
+  needn't exist before a build, and isn't in the repository: the pre-build event writes it, then
+  dcc compiles it. Until the first build the Project Manager may show it as missing.
+- **Edit the source, never `Greet.pas`**, and keep `Greet.pas` closed: the IDE compiles an open
+  file from its editor, not from disk, and the next build replaces it anyway.
+
+(The source may also be called `Greet.dpps`, with `unit Greet;`: the same, but the IDE opens it
+as plain text.)
 
 ## Try it
 
@@ -17,12 +32,12 @@ Needs Python and the grammar, as in the main README's *With Python* (`get-gramma
 
 1. Open `Hello.dproj` in Delphi 13 and build it (Win32 or Win64). `Greet.pas` appears; the
    program prints `Bonjour, Delphi! Bonjour, Delphi!` and `G'day, Delphi!`.
-2. Edit `Greet.dpps`, not `Greet.pas`: the next build writes `Greet.pas` again.
+2. Edit `Greet.dpps.pas`: the next build writes `Greet.pas` again.
 3. Give the `case` a range label, `'a'..'c': Hello := 'Hm';`. The build stops before dcc, and the
-   Messages pane lists the rule's error on `Greet.dpps`, line and column:
+   Messages pane lists the rule's error on `Greet.dpps.pas`, line and column:
 
    ```
-   Greet.dpps(30,5): error DPPS-case-of: a range label in a case on strings or class types: write it as an if
+   Greet.dpps.pas(30,5): error DPPS-case-of: a range label in a case on strings or class types: write it as an if
    ```
 
    MSBuild adds a line of its own after it, that the command "exited with code 1".
@@ -40,7 +55,7 @@ msbuild Hello.dproj /p:Platform=Win64
 
 ```
 set PYTHONPATH=$(MSBuildProjectDirectory)\..\..\python
-python -m delphipp --msbuild "$(MSBuildProjectDirectory)\Greet.dpps"
+python -m delphipp --msbuild "$(MSBuildProjectDirectory)\Greet.dpps.pas"
 ```
 
 - `--msbuild` writes each warning and error as `file(line,col): error DPPS-rule: text`, which
@@ -53,9 +68,9 @@ python -m delphipp --msbuild "$(MSBuildProjectDirectory)\Greet.dpps"
 ## Not yet
 
 - **dcc's own messages name `Greet.pas`**, and its lines: where a rewrite adds lines
-  (`case-of` here adds two), they are that many below the `.dpps` line. Mapping them back to the
-  `.dpps` is next.
-- **No highlighting for `.dpps`** in the IDE's editor; it opens as plain text. Opening it as Delphi
-  (*Tools > Options > Editor > Language*, adding the extension) is untested.
+  (`case-of` here adds two), they are that many below the source's line. Mapping them back is
+  next.
+- **Error Insight underlines the source** where it uses what only the rules accept (the `case`
+  on strings): to the IDE it is Delphi it can't compile.
 - **The Delphi engine** (`bin\delphipp.exe`) instead of Python: the same line, once it has
   `--msbuild` and `.dpps`.
