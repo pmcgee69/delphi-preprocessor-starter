@@ -87,7 +87,9 @@ python -m delphipp --msbuild "$(MSBuildProjectDirectory)\Greet.dpps"
 - **dcc's own messages name `Greet.pas`**, and its lines: where a rewrite adds lines
   (`case-of` here adds two), they are that many below the source's line. Mapping them back is
   next.
-- **Error Insight underlines the source** where it uses what only the rules accept (the `case`
-  on strings): to the IDE it is Delphi it can't compile.
+- **The IDE only highlights the source, by its words:** Error Insight doesn't check a `.dpps`
+  file, so where it uses what only the rules accept (the `case` on strings) nothing is
+  underlined, which here is what we want. The rules' own messages come at the build. (As
+  `Greet.dpps.pas` it is checked, and the `case` is underlined as Delphi dcc can't compile.)
 - **The Delphi engine** (`bin\delphipp.exe`) instead of Python: the same line, once it has
   `--msbuild` and `.dpps`.
