@@ -23,7 +23,7 @@ procedure Register;
 implementation
 
 uses
-  System.SysUtils, System.Types, System.Classes, System.Math, System.Generics.Collections,
+  Winapi.Windows, System.SysUtils, System.Types, System.Classes, System.Math, System.Generics.Collections,
   Vcl.Controls, Vcl.Graphics, Vcl.Forms, Vcl.ExtCtrls,
   ToolsAPI, ToolsAPI.Editor,
   DelphiPP.Marks;
@@ -35,6 +35,13 @@ const
   HintColor    = TColor($A0A0A0);   // grey
 
 type
+  // a hint in a fixed-width font, as it shows code: THintWindow.CalcHintRect sets the
+  // hint font back each time (user, 7 Nov, the first hover: proportional, ragged indents)
+  TCodeHint = class(THintWindow)
+  public
+    function CalcHintRect(MaxWidth: Integer; const AHint: string; AData: TCustomData): TRect; override;
+  end;
+
   TRulesNotifier = class(TNTACodeEditorNotifier)
   private
     FFiles: TObjectDictionary<string, TAnalysis>;     // by file name, lower case
@@ -90,14 +97,25 @@ begin
   until False;
 end;
 
+{ TCodeHint }
+
+function TCodeHint.CalcHintRect(MaxWidth: Integer; const AHint: string; AData: TCustomData): TRect;
+begin
+  inherited;                                        // the hint font, at the screen's scale
+  Canvas.Font.Name := 'Consolas';
+  Result := Rect(0, 0, MaxWidth, 0);
+  DrawText(Canvas.Handle, AHint, -1, Result, DT_CALCRECT or DT_LEFT or DT_NOPREFIX);
+  Inc(Result.Right, 6);
+  Inc(Result.Bottom, 2);
+end;
+
 { TRulesNotifier }
 
 constructor TRulesNotifier.Create;
 begin
   inherited Create;
   FFiles := TObjectDictionary<string, TAnalysis>.Create([doOwnsValues]);
-  FHint  := THintWindow.Create(nil);
-  FHint.Canvas.Font.Name := 'Consolas';           // the hover shows code
+  FHint  := TCodeHint.Create(nil);
   FTimer := TTimer.Create(nil);
   FTimer.Enabled := False;
   FTimer.OnTimer := OnTimer;
