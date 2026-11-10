@@ -13,7 +13,12 @@ bin\delphipp.exe --list              rem the rules
 bin\delphipp.exe --tree FILE         rem a file's tree: the kinds of node a rule can ask for
 bin\delphipp.exe FOLDER              rem run them: messages
 bin\delphipp.exe -o OUT FOLDER       rem and the rewritten files, under OUT
+bin\delphipp.exe X.dpps              rem write X.pas beside it, rewritten (X.dpps.pas too)
+bin\delphipp.exe --msbuild X.dpps    rem the same, messages as MSBuild reads them: a pre-build event
 ```
+
+The last is what an IDE project's pre-build event runs (`..\examples\ide\`), so a project needs
+no Python.
 
 `get-treesitter4d.cmd` uses what Windows 10 and later have (git, curl, certutil, tar): it
 clones TreeSitter4D at its release tag for `TreeSitter.Api.pas`, downloads the release's

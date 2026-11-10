@@ -45,7 +45,9 @@ above, but which it won't keep in the project. Either way its header may say `un
 
 ## Try it
 
-Needs Python and the grammar, as in the main README's *With Python* (`get-grammar.py` once).
+Needs the starter's `delphipp.exe`, built once with Delphi alone: in `..\..\delphi\`,
+`get-treesitter4d.cmd` then `build.cmd` (its README). No Python. (Or the Python side: see
+*The setting*.)
 
 1. Open `Hello.dproj` in Delphi 13 and build it (Win32 or Win64). `Greet.pas` appears; the
    program prints `Bonjour, Delphi! Bonjour, Delphi!` and `G'day, Delphi!`.
@@ -72,9 +74,20 @@ msbuild Hello.dproj /p:Platform=Win64
 `PreBuildEvent`:
 
 ```
+"$(MSBuildProjectDirectory)\..\..\delphi\bin\delphipp.exe" --msbuild "$(MSBuildProjectDirectory)\Greet.dpps"
+```
+
+The Python side does the same (it did this first), with Python and the grammar as in the main
+README's *With Python*:
+
+```
 set PYTHONPATH=$(MSBuildProjectDirectory)\..\..\python
 python -m delphipp --msbuild "$(MSBuildProjectDirectory)\Greet.dpps"
 ```
+
+The two give the same messages, the same exit status and the same `Greet.pas`, byte for byte:
+checked on `Greet.dpps` as it is, with the range label above, with a UTF-8 BOM, and named
+`Greet.dpps.pas`.
 
 - `--msbuild` writes each warning and error as `file(line,col): error DPPS-rule: text`, which
   MSBuild reads, and so the Messages pane lists. A hint stays plain, in the Output pane.
@@ -92,5 +105,3 @@ python -m delphipp --msbuild "$(MSBuildProjectDirectory)\Greet.dpps"
   file, so where it uses what only the rules accept (the `case` on strings) nothing is
   underlined, which here is what we want. The rules' own messages come at the build. (As
   `Greet.dpps.pas` it is checked, and the `case` is underlined as Delphi dcc can't compile.)
-- **The Delphi engine** (`bin\delphipp.exe`) instead of Python: the same line, once it has
-  `--msbuild` and `.dpps`.
