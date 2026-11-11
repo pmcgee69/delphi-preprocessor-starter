@@ -57,7 +57,7 @@ README). Either puts it in `..\..\delphi\bin\`, where this project's event looks
    Messages pane lists the rule's error on `Greet.dpps`, line and column:
 
    ```
-   Greet.dpps(30,5): error DPPS-case-of: a range label in a case on strings or class types: write it as an if
+   Greet.dpps(31,5): error DPPS-case-of: a range label in a case on strings or class types: write it as an if
    ```
 
    MSBuild adds a line of its own after it, that the command "exited with code 1". `Greet.pas`

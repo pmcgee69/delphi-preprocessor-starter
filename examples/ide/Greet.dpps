@@ -22,6 +22,7 @@ uses
 function Greeting(const G: TGreeting): string;
 begin
   Assert(G.Times > 0);            // assert-message: gains its text, file and line
+
   var Hello: string;
   case G.Lang of                  // case-of: a case on strings, which dcc refuses, as an if chain
     'en': Hello := 'Hello';
@@ -30,6 +31,7 @@ begin
   else
     Hello := 'G''day';
   end;
+
   Result := '';
   for var I := 1 to G.Times do
     Result := Result + Format('%s, %s! ', [Hello, G.Name]);
