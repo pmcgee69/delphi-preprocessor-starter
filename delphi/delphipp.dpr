@@ -16,8 +16,9 @@ program delphipp;
   A .dpps file is Delphi source the rules rewrite before dcc sees it: the .pas beside it is
   written from it, so a project's pre-build event can run this and the IDE builds the .pas as
   usual (..\examples\ide\). Its header may name it `unit X.dpps;`; X.pas is written with
-  `unit X;`. With --msbuild, an error or warning is `file(line,col): warning DPPS-rule: text`,
-  which MSBuild's Exec, and so the IDE's Messages pane, lists; a hint is printed plain. }
+  `unit X;`, and with dcc's $LINE directives, so dcc's own messages name X.dpps and its lines.
+  With --msbuild, an error or warning is `file(line,col): warning DPPS-rule: text`, which
+  MSBuild's Exec, and so the IDE's Messages pane, lists; a hint is printed plain. }
 
 {$APPTYPE CONSOLE}
 
@@ -56,12 +57,13 @@ begin
 end;
 
 // A source's `unit X.dpps;` is, in X.pas, `unit X;` (after a UTF-8 BOM too, which the IDE may
-// write). Matched on the bytes seen as Latin-1, one char each, so a match's place is its place in
-// the bytes, and those are cut: nothing is decoded and written back.
+// write, and the {$LINE} naming the source). Matched on the bytes seen as Latin-1, one char each,
+// so a match's place is its place in the bytes, and those are cut: nothing is decoded and written
+// back.
 function Unsuffixed(const Source: TBytes): TBytes;
 const
   Space  = '[ \t\r\n\f\v]';
-  Header = '(?im)^((?:\xEF\xBB\xBF)?' + Space + '*(?:unit|program|library)' + Space + '+)' +
+  Header = '(?im)^((?:\xEF\xBB\xBF)?(?:\{\$LINE [^}]*\})?' + Space + '*(?:unit|program|library)' + Space + '+)' +
            '([A-Za-z0-9_.]+?)\.dpps(' + Space + '*;)';
   Dpps   = Length('.dpps');
 begin
@@ -142,8 +144,9 @@ begin
           Inc(Files);
           const Source = TFile.ReadAllBytes(F);
           var Output: TBytes;
+          var Edits: TArray<TEdit>;
           var Failed := False;
-          for var M in Run(Source, Rules, F, Output) do
+          for var M in RunWithEdits(Source, Rules, F, Output, Edits) do
           begin
             Writeln(Shown(F, M, MSBuild));
             if M.Level = 'error' then
@@ -162,8 +165,9 @@ begin
             if not Failed then
             begin
               // its .pas, beside it or under OUT, written only when it differs, so the IDE
-              // doesn't see a change on disk where there is none
-              const Pas = Unsuffixed(Output);
+              // doesn't see a change on disk where there is none. Its {$LINE}s put dcc's
+              // messages on this file and its lines, where the rules moved them
+              const Pas = Unsuffixed(WithLines(Source, Edits, TPath.GetFullPath(F)));
               var Dir := OutDir;
               if Dir = '' then
                 Dir := ExtractFilePath(TPath.GetFullPath(F));

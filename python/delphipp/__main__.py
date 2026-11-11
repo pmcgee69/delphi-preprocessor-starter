@@ -20,9 +20,11 @@ error; a hint is printed plain.
 
 The source may be named X.dpps.pas instead, so the IDE highlights it as Delphi without a
 setting. Either way its header may name it `unit X.dpps;`, which tells the two apart in the
-IDE; X.pas is written with `unit X;`.
+IDE; X.pas is written with `unit X;`, and with dcc's {$LINE} directives, so dcc's own messages
+name X.dpps and its lines.
 """
 import argparse
+import os
 import pathlib
 import re
 import sys
@@ -50,8 +52,9 @@ def generated(f: pathlib.Path) -> str | None:
 
 
 # a source's `unit X.dpps;` is, in X.pas, `unit X;` (after a UTF-8 BOM too,
-# which the IDE may write)
-HEADER = re.compile(rb'(?im)^((?:\xef\xbb\xbf)?\s*(?:unit|program|library)\s+)([\w.]+?)\.dpps(\s*;)')
+# which the IDE may write, and the {$LINE} naming the source)
+HEADER = re.compile(rb'(?im)^((?:\xef\xbb\xbf)?(?:\{\$LINE [^}]*\})?\s*(?:unit|program|library)\s+)'
+                    rb'([\w.]+?)\.dpps(\s*;)')
 
 
 def files(paths):
@@ -90,7 +93,7 @@ def main(argv=None):
     for f in files(a.paths):
         n += 1
         raw = f.read_bytes()
-        out, messages = engine.run(raw, chosen, str(f))
+        out, messages, edits = engine.run_with_edits(raw, chosen, str(f))
         for m in messages:
             print(shown(f, m, a.msbuild))
             errors += m.level == 'error'
@@ -102,8 +105,9 @@ def main(argv=None):
             pass
         elif name is not None:
             # its .pas, beside it or under OUT, written only when it differs, so the IDE
-            # doesn't see a change on disk where there is none
-            out = HEADER.sub(rb'\1\2\3', out, count=1)
+            # doesn't see a change on disk where there is none. Its {$LINE}s put dcc's
+            # messages on this file and its lines, where the rules moved them
+            out = HEADER.sub(rb'\1\2\3', engine.with_lines(raw, edits, os.path.abspath(f)), count=1)
             dest = (pathlib.Path(a.out) if a.out else f.parent) / name
             dest.parent.mkdir(parents=True, exist_ok=True)
             if not dest.exists() or dest.read_bytes() != out:

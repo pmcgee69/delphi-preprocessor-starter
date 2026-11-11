@@ -1,0 +1,10 @@
+{$LINE 2 'errors.dpps'}unit UsesErrors;
+
+interface
+
+uses System.SysUtils,
+  System.Classes, System.SysUtils;
+
+implementation
+
+end.

@@ -149,6 +149,36 @@ def run_with_edits(raw: bytes, rules, filename: str = '<input>') -> tuple[bytes,
     return out, sorted(ctx.messages, key=lambda m: (m.line, m.col)), applied
 
 
+def with_lines(raw: bytes, edits, filename: str) -> bytes:
+    """The output again (edits as run_with_edits gives them), with dcc's {$LINE N 'file'}, so
+    dcc's messages, Assert's text and the debugger name filename and its lines, not the output's:
+    one at the top, naming it, and one after each edit that changes the number of lines.
+    {$LINE N} makes the next line N and the rest of its own line N - 1, so none adds a line.
+    filename is left out ('' or a name the directive can't hold): the lines are still right."""
+    encoding, _ = decode(raw)
+    # a name in quotes, which ends at the first quote ('' isn't one), in the file's encoding
+    name = filename
+    try:
+        if "'" in name or '}' in name:
+            name = ''
+        name.encode(encoding)
+    except UnicodeEncodeError:
+        name = ''
+    out = raw
+    for e in reversed(edits):
+        text = e.text
+        if text.count(b'\n') != raw.count(b'\n', e.start, e.end):
+            # the source's lines again from the line after the edit's end
+            line = raw.count(b'\n', 0, e.end) + 2
+            text += f'{{$LINE {line}}}'.encode(encoding)
+        out = out[:e.start] + text + out[e.end:]
+    if name:
+        # before everything but a UTF-8 BOM: line 1 is then 1, of the file named
+        at = 3 if raw.startswith(b'\xef\xbb\xbf') else 0
+        out = out[:at] + f"{{$LINE 2 '{name}'}}".encode(encoding) + out[at:]
+    return out
+
+
 def _first_error(root):
     """The error the parser found: the innermost node holding one, first in
     the file. Down from the root, which is itself an ERROR node when the

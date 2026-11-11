@@ -95,14 +95,51 @@ checked on `Greet.dpps` as it is, with the range label above, with a UTF-8 BOM, 
   MSBuild reads, and so the Messages pane lists. A hint stays plain, in the Output pane.
 - `Greet.pas` is written only when it changes, so the IDE isn't told a file changed when it
   hasn't.
+- **dcc's own messages name `Greet.dpps`, and its lines**, through dcc's `{$LINE N 'file'}`
+  (below).
 - The event runs from the output folder: hence `$(MSBuildProjectDirectory)` in every path.
 - Code insight doesn't run build events: it reads the `Greet.pas` of the last build.
 
+## dcc's messages on the source's lines: `{$LINE}`
+
+A rewrite can change the number of lines (`case-of` here adds two), so `Greet.pas`'s lines
+aren't `Greet.dpps`'s. dcc has a directive, `{$LINE N 'file'}`, that the docwiki's list of
+directives leaves out (found by trying it, 11 Nov; RemObjects' Elements documents one): the
+next line is line N of that file, and the rest of the directive's own line N − 1 (as C's
+`#line`). `Greet.pas` is written with one before everything, naming `Greet.dpps` by its full
+path, and one after each edit that changes the number of lines; none adds a line:
+
+```pascal
+{$LINE 2 'D:\…\examples\ide\Greet.dpps'}unit Greet;
+…
+  else
+    Hello := 'G''day';{$LINE 34}
+```
+
+So, with nothing to set up, dcc's errors, warnings and hints name `Greet.dpps` and its line, in
+the IDE's Messages pane and in msbuild's output; an `Assert` without a message names the
+`.dpps` and its line; and the debug information (the `.map`, the `.rsm`) gives its lines
+as `Greet.dpps`'s. Checked with dcc64 and dcc32 37.0 and msbuild: an undeclared identifier
+planted on line 35 of `Greet.dpps` comes out as
+
+```
+Greet.dpps(35): error E2003: Undeclared identifier: 'Undefined1' [...\Hello.dproj]
+```
+
+where it was `Greet.pas(37)`. Not yet seen in the IDE itself.
+
+- **Inside a rewritten statement the lines are near, not exact**: the `if` chain `case-of`
+  writes, with the comment it moves, has nine lines for the `case`'s seven, numbered on from
+  the `case`'s, so an error in
+  the `'fr'` arm (line 29) is given as line 31. After the statement they are exact again.
+- **The name is the file's full path**, as the directive ends it at the first quote: a path
+  with a `'` in it is left out, and the messages name `Greet.pas`, on `Greet.dpps`'s lines.
+- **In code `{$IFDEF}` leaves out**, a directive after an edit there is left out too (checked:
+  dcc skips it): an edit in such a part that changes the number of lines leaves the lines after
+  it off by that many, when the part is left out.
+
 ## Not yet
 
-- **dcc's own messages name `Greet.pas`**, and its lines: where a rewrite adds lines
-  (`case-of` here adds two), they are that many below the source's line. Mapping them back is
-  next.
 - **The IDE only highlights the source, by its words:** Error Insight doesn't check a `.dpps`
   file, so where it uses what only the rules accept (the `case` on strings) nothing is
   underlined, which here is what we want. The rules' own messages come at the build. (As
