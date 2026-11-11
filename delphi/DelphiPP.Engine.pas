@@ -493,6 +493,14 @@ begin
     if Name.Contains('''') or Name.Contains('}') or
        (Encoding.GetString(Encoding.GetBytes(Name)) <> Name) then
       Name := '';
+    // the file's own line break
+    var LineBreak: TBytes := [10];
+    for var K := 1 to High(Source) do
+      if (Source[K - 1] = 13) and (Source[K] = 10) then
+      begin
+        LineBreak := [13, 10];
+        Break;
+      end;
     Result := Copy(Source);
     for var I := High(Edits) downto 0 do
     begin
@@ -505,19 +513,37 @@ begin
         Blank := Blank and (Source[K] in [9..13, 32]);     // Python's bytes.strip
       if (Newlines(Text, 0, Length(Text)) <> Newlines(Source, E.StartByte, E.EndByte)) and
          not Blank then
-        // the source's lines again from the line after the edit's end
-        Text := Text + Encoding.GetBytes(Format('{$LINE %d}', [Newlines(Source, 0, E.EndByte) + 2]));
+      begin
+        // the text after the edit's last line break: blanks only, its indent, when it ends
+        // where a line starts
+        var LastBreak := -1;
+        for var K := 0 to High(Text) do
+          if Text[K] = 10 then
+            LastBreak := K;
+        const Tail = Copy(Text, LastBreak + 1, Length(Text) - LastBreak - 1);
+        var TailBlank := True;
+        for var B in Tail do
+          TailBlank := TailBlank and (B in [9..13, 32]);
+        if (LastBreak >= 0) and TailBlank then
+          // a line of its own, so the code is left as it was; the next line is the
+          // source's at the edit's end
+          Text := Text + Encoding.GetBytes(Format('{$LINE %d}', [Newlines(Source, 0, E.EndByte) + 1])) +
+                  LineBreak + Tail
+        else
+          // after the code, on the edit's last line: from the line after the edit's end
+          Text := Text + Encoding.GetBytes(Format('   {$LINE %d}', [Newlines(Source, 0, E.EndByte) + 2]));
+      end;
       Result := Copy(Result, 0, E.StartByte) + Text +
                 Copy(Result, E.EndByte, Length(Result) - E.EndByte);
     end;
     if Name <> '' then
     begin
-      // before everything but a UTF-8 BOM: line 1 is then 1, of the file named
+      // a line of its own before everything but a UTF-8 BOM: line 1 is then 1, of the file named
       var At := 0;
       if (Length(Source) >= 3) and (Source[0] = $EF) and (Source[1] = $BB) and (Source[2] = $BF) then
         At := 3;
-      Result := Copy(Result, 0, At) + Encoding.GetBytes(Format('{$LINE 2 ''%s''}', [Name])) +
-                Copy(Result, At, Length(Result) - At);
+      Result := Copy(Result, 0, At) + Encoding.GetBytes(Format('{$LINE 1 ''%s''}', [Name])) +
+                LineBreak + Copy(Result, At, Length(Result) - At);
     end;
   finally
     if not TEncoding.IsStandardEncoding(Encoding) then

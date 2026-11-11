@@ -1,13 +1,14 @@
-{$LINE 2 'program.dpps'}program Derived;
+{$LINE 1 'program.dpps'}
+program Derived;
 
 {$APPTYPE CONSOLE}
 {$SCOPEDENUMS ON}
 
 type
-  TLight{$LINE 9} = (Red, Amber, Green);
+  TLight   {$LINE 9} = (Red, Amber, Green);
   TLightHelper = record helper for TLight
     function ToString: string;
-  end;{$LINE 9}
+  end;   {$LINE 9}
 
 function TLightHelper.ToString: string;
 begin
@@ -18,7 +19,7 @@ begin
   else
     Result := '';
   end;
-end;{$LINE 9}
+end;   {$LINE 9}
 
 begin
   for var L := Low(TLight) to High(TLight) do

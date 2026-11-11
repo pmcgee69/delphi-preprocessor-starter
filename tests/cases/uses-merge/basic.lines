@@ -1,4 +1,5 @@
-{$LINE 2 'basic.dpps'}unit UsesBasic;
+{$LINE 1 'basic.dpps'}
+unit UsesBasic;
 
 interface
 

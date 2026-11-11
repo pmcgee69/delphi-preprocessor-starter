@@ -1,15 +1,18 @@
-{$LINE 2 'program.dpps'}program Footnoted;
+{$LINE 1 'program.dpps'}
+program Footnoted;
 
 {$APPTYPE CONSOLE}
 
 type
   /// <summary>A digit.</summary>
-  {$LINE 7}TCount = 0..9;
+  {$LINE 6}
+  TCount = 0..9;
 
 /// <summary>N squared.</summary>
 /// <param name="N">a digit.</param>
 /// <returns>from 0 to 81.</returns>
-{$LINE 9}function Square(N: TCount): Integer;
+{$LINE 8}
+function Square(N: TCount): Integer;
 begin
   Result := N * N;
 end;

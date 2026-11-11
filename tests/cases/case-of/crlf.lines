@@ -1,4 +1,5 @@
-{$LINE 2 'crlf.dpps'}unit CrlfCase;
+{$LINE 1 'crlf.dpps'}
+unit CrlfCase;
 interface
 implementation
 procedure P(const S: string);

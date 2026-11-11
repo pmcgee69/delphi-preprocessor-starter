@@ -1,4 +1,5 @@
-{$LINE 2 'basic.dpps'}program CaseBasic;
+{$LINE 1 'basic.dpps'}
+program CaseBasic;
 
 {$APPTYPE CONSOLE}
 
@@ -18,7 +19,7 @@ begin
     begin
       Writeln('  (no match for ', s, ')');
       Result := 0
-    end;{$LINE 20}
+    end;   {$LINE 20}
 end;
 
 function Kind(const x: TObject): string;

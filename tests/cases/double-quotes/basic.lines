@@ -1,4 +1,5 @@
-{$LINE 2 'basic.dpps'}unit DoubleQuotesBasic;
+{$LINE 1 'basic.dpps'}
+unit DoubleQuotesBasic;
 
 interface
 

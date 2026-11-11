@@ -1,19 +1,20 @@
-{$LINE 2 'basic.dpps'}unit Basic;
+{$LINE 1 'basic.dpps'}
+unit Basic;
 
 interface
 
 type
-  TSize{$LINE 8} = (Small, Medium, Large);
+  TSize   {$LINE 8} = (Small, Medium, Large);
   TSizeHelper = record helper for TSize
     function ToString: string;
-  end;{$LINE 8}
+  end;   {$LINE 8}
 
   TPlain = (One, Two);
 
-  TSuit{$LINE 13} = (Hearts = 1, Spades = 4);
+  TSuit   {$LINE 13} = (Hearts = 1, Spades = 4);
   TSuitHelper = record helper for TSuit
     function ToString: string;
-  end;{$LINE 13}
+  end;   {$LINE 13}
 
 function Describe(S: TSize): string;
 
@@ -31,7 +32,7 @@ begin
   else
     Result := '';
   end;
-end;{$LINE 20}
+end;   {$LINE 20}
 
 function TSuitHelper.ToString: string;
 begin
@@ -41,13 +42,13 @@ begin
   else
     Result := '';
   end;
-end;{$LINE 20}
+end;   {$LINE 20}
 
 type
-  TLocal{$LINE 24} = (Near, Far);
+  TLocal   {$LINE 24} = (Near, Far);
   TLocalHelper = record helper for TLocal
     function ToString: string;
-  end;{$LINE 24}
+  end;   {$LINE 24}
 
 function TLocalHelper.ToString: string;
 begin
@@ -57,7 +58,7 @@ begin
   else
     Result := '';
   end;
-end;{$LINE 24}
+end;   {$LINE 24}
 
 function Describe(S: TSize): string;
 begin

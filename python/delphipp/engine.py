@@ -164,20 +164,28 @@ def with_lines(raw: bytes, edits, filename: str) -> bytes:
         name.encode(encoding)
     except UnicodeEncodeError:
         name = ''
+    nl = b'\r\n' if b'\r\n' in raw else b'\n'
     out = raw
     for e in reversed(edits):
         text = e.text
         # (none when nothing but blanks follows: after end., where the footnotes went, dcc
         # would warn of text after it, W1011)
         if text.count(b'\n') != raw.count(b'\n', e.start, e.end) and raw[e.end:].strip():
-            # the source's lines again from the line after the edit's end
-            line = raw.count(b'\n', 0, e.end) + 2
-            text += f'{{$LINE {line}}}'.encode(encoding)
+            tail = text[text.rfind(b'\n') + 1:]
+            if b'\n' in text and not tail.strip():
+                # the edit ends where a line starts (its indent after it): a line of its own,
+                # so the code is left as it was; the next line is the source's at the edit's end
+                line = raw.count(b'\n', 0, e.end) + 1
+                text = text[:len(text) - len(tail)] + tail + f'{{$LINE {line}}}'.encode(encoding) + nl + tail
+            else:
+                # after the code, on the edit's last line: from the line after the edit's end
+                line = raw.count(b'\n', 0, e.end) + 2
+                text += f'   {{$LINE {line}}}'.encode(encoding)
         out = out[:e.start] + text + out[e.end:]
     if name:
-        # before everything but a UTF-8 BOM: line 1 is then 1, of the file named
+        # a line of its own before everything but a UTF-8 BOM: line 1 is then 1, of the file named
         at = 3 if raw.startswith(b'\xef\xbb\xbf') else 0
-        out = out[:at] + f"{{$LINE 2 '{name}'}}".encode(encoding) + out[at:]
+        out = out[:at] + f"{{$LINE 1 '{name}'}}".encode(encoding) + nl + out[at:]
     return out
 
 

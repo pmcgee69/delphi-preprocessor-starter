@@ -113,14 +113,22 @@ A rewrite can change the number of lines (`case-of` here adds two), so `Greet.pa
 aren't `Greet.dpps`'s. dcc has a directive, `{$LINE N 'file'}`, that the docwiki's list of
 directives leaves out (found by trying it, 11 Nov; RemObjects' Elements documents one): the
 next line is line N of that file, and the rest of the directive's own line N − 1 (as C's
-`#line`). `Greet.pas` is written with one before everything, naming `Greet.dpps` by its full
-path, and one after each edit that changes the number of lines; none adds a line:
+`#line`). `Greet.pas` is written with one on a line of its own before everything, naming
+`Greet.dpps` by its full path, and one after each edit that changes the number of lines, kept
+out of the code's way (user, 12 Nov): on a line of its own when the edit ends where a line
+starts (the XMLDoc from the footnotes), else after the code on the edit's last line:
 
 ```pascal
-{$LINE 2 'D:\…\examples\ide\Greet.dpps'}unit Greet;
+{$LINE 1 'D:\…\examples\ide\Greet.dpps'}
+unit Greet;
+…
+type
+  /// <summary>Who to greet, in which language, and how many times.</summary>
+  {$LINE 14}
+  TGreeting = record
 …
   else
-    Hello := 'G''day';{$LINE 34}
+    Hello := 'G''day';   {$LINE 36}
 ```
 
 So, with nothing to set up, dcc's errors, warnings and hints name `Greet.dpps` and its line, in

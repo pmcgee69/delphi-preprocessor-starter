@@ -1,33 +1,39 @@
-{$LINE 2 'basic.dpps'}unit Basic;
+{$LINE 1 'basic.dpps'}
+unit Basic;
 
 interface
 
 type
   /// <summary>Someone who can be greeted.</summary>
-  {$LINE 7}TPerson = class
+  {$LINE 6}
+  TPerson = class
   private
     FName: string;
   public
     /// <summary>Greets another.</summary>
     /// <param name="Other">who.</param>
     /// <param name="Times">how often.</param>
-    {$LINE 11}function Greet(const Other: string; Times: Integer): string;
+    {$LINE 10}
+    function Greet(const Other: string; Times: Integer): string;
     /// <summary>The person's name.</summary>
-    {$LINE 12}property Name: string read FName;
+    {$LINE 11}
+    property Name: string read FName;
   end;
 
 /// <summary>Says hello to Name, Times times, in the language of the day.</summary>
 /// <param name="Name">who to greet.</param>
 /// <param name="Times">how often; at least 1 (and &lt; 10 &amp; &gt; 0).</param>
 /// <returns>the greeting.</returns>
-{$LINE 15}function Greeting(const Name: string; Times: Integer): string;
+{$LINE 14}
+function Greeting(const Name: string; Times: Integer): string;
 
 implementation
 
 /// <summary>Twice the sum, a routine of the implementation's own.</summary>
 /// <param name="A">one.</param>
 /// <param name="B">the other.</param>
-{$LINE 19}function Twice(A, B: Integer): Integer;
+{$LINE 18}
+function Twice(A, B: Integer): Integer;
 begin
   Result := 2 * (A + B);
 end;

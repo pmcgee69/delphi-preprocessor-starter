@@ -1,4 +1,5 @@
-{$LINE 2 'errors.dpps'}unit CaseErrors;
+{$LINE 1 'errors.dpps'}
+unit CaseErrors;
 
 interface
 

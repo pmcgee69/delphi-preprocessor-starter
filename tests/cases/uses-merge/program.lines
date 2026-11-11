@@ -1,4 +1,5 @@
-{$LINE 2 'program.dpps'}program UsesProgram;
+{$LINE 1 'program.dpps'}
+program UsesProgram;
 
 {$APPTYPE CONSOLE}
 
