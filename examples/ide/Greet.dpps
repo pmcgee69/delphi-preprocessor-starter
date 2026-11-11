@@ -42,7 +42,7 @@ end.
 [TGreeting] Who to greet, in which language, and how many times.
 
 [Greeting] A greeting for G, repeated G.Times times on one line.
-  G: the name, the language ('en', 'fr' or 'de'; any other is G'day), and the count, at least 1.
+  G: the name, the language ('en', 'fr' or 'de'; any other is G''day), and the count, at least 1.
   Result: the greetings, separated by spaces.
 
 

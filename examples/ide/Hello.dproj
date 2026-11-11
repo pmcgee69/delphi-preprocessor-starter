@@ -1,4 +1,4 @@
-<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{7D3F2B6A-4C1E-4E8B-9A57-2F0C6B1D8E43}</ProjectGuid>
         <MainSource>Hello.dpr</MainSource>
@@ -39,11 +39,8 @@
         <DCC_Namespace>System;$(DCC_Namespace)</DCC_Namespace>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
         <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
-        <!-- The rules write Greet.pas from Greet.dpps before every build, with the starter's
-             delphipp.exe (delphi\build.cmd builds it). A rule's error fails the build; its
-             warnings and errors are listed in the Messages pane. The Python side can do the
-             same: the examples\ide README has its event. -->
-        <PreBuildEvent><![CDATA["$(MSBuildProjectDirectory)\..\..\delphi\bin\delphipp.exe" --msbuild "$(MSBuildProjectDirectory)\Greet.dpps"]]></PreBuildEvent>
+        <PreBuildEvent><![CDATA["$(MSBuildProjectDirectory)\..\..\delphi\bin\delphipp.exe" --msbuild "$(MSBuildProjectDirectory)\Greet.dpps"
+$(PreBuildEvent)]]></PreBuildEvent>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
         <DCC_Namespace>Winapi;System.Win;$(DCC_Namespace)</DCC_Namespace>
@@ -94,4 +91,37 @@
         <ProjectFileVersion>12</ProjectFileVersion>
     </ProjectExtensions>
     <Import Project="$(BDS)\Bin\CodeGear.Delphi.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Delphi.Targets')"/>
+    <Import Project="$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj" Condition="Exists('$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj')"/>
+    <PropertyGroup Condition="'$(Config)'=='Release' And '$(Platform)'=='Win32'">
+        <PreBuildEvent>&quot;$(MSBuildProjectDirectory)\..\..\delphi\bin\delphipp.exe&quot; --msbuild &quot;$(MSBuildProjectDirectory)\Greet.dpps&quot;</PreBuildEvent>
+        <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
+        <PreLinkEvent/>
+        <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
+        <PostBuildEvent/>
+        <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Config)'=='Release' And '$(Platform)'=='Win64'">
+        <PreBuildEvent>&quot;$(MSBuildProjectDirectory)\..\..\delphi\bin\delphipp.exe&quot; --msbuild &quot;$(MSBuildProjectDirectory)\Greet.dpps&quot;</PreBuildEvent>
+        <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
+        <PreLinkEvent/>
+        <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
+        <PostBuildEvent/>
+        <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Config)'=='Debug' And '$(Platform)'=='Win32'">
+        <PreBuildEvent>&quot;$(MSBuildProjectDirectory)\..\..\delphi\bin\delphipp.exe&quot; --msbuild &quot;$(MSBuildProjectDirectory)\Greet.dpps&quot;</PreBuildEvent>
+        <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
+        <PreLinkEvent/>
+        <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
+        <PostBuildEvent/>
+        <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Config)'=='Debug' And '$(Platform)'=='Win64'">
+        <PreBuildEvent>&quot;$(MSBuildProjectDirectory)\..\..\delphi\bin\delphipp.exe&quot; --msbuild &quot;$(MSBuildProjectDirectory)\Greet.dpps&quot;</PreBuildEvent>
+        <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
+        <PreLinkEvent/>
+        <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
+        <PostBuildEvent/>
+        <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
+    </PropertyGroup>
 </Project>

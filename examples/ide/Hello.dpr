@@ -1,6 +1,5 @@
-program Hello;
-
 {$APPTYPE CONSOLE}
+program Hello;
 
 uses
   Greet in 'Greet.pas';    // written from Greet.dpps by the pre-build event
@@ -19,3 +18,5 @@ begin
 
   Readln;
 end.
+
+
