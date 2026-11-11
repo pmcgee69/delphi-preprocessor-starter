@@ -20,6 +20,10 @@ bin\delphipp.exe --msbuild X.dpps    rem the same, messages as MSBuild reads the
 The last is what an IDE project's pre-build event runs (`..\examples\ide\`), so a project needs
 no Python.
 
+Or in the IDE: open `delphipp.dproj` and build, Win64 or Win32. It builds into the same
+`bin\` and `bin\win32\` as `build.cmd`, with TreeSitter4D's units on its search path
+(`get-treesitter4d.cmd` first, as for `build.cmd`).
+
 `get-treesitter4d.cmd` uses what Windows 10 and later have (git, curl, certutil, tar): it
 clones TreeSitter4D at its release tag for `TreeSitter.Api.pas`, downloads the release's
 objects, checks their SHA-256, and unzips them where that unit links them with `{$L}`.
