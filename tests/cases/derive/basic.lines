@@ -1,0 +1,67 @@
+{$LINE 2 'basic.dpps'}unit Basic;
+
+interface
+
+type
+  TSize{$LINE 8} = (Small, Medium, Large);
+  TSizeHelper = record helper for TSize
+    function ToString: string;
+  end;{$LINE 8}
+
+  TPlain = (One, Two);
+
+  TSuit{$LINE 13} = (Hearts = 1, Spades = 4);
+  TSuitHelper = record helper for TSuit
+    function ToString: string;
+  end;{$LINE 13}
+
+function Describe(S: TSize): string;
+
+implementation
+
+uses
+  System.SysUtils;
+
+function TSizeHelper.ToString: string;
+begin
+  case Self of
+    TSize.Small:  Result := 'Small';
+    TSize.Medium: Result := 'Medium';
+    TSize.Large:  Result := 'Large';
+  else
+    Result := '';
+  end;
+end;{$LINE 20}
+
+function TSuitHelper.ToString: string;
+begin
+  case Self of
+    TSuit.Hearts: Result := 'Hearts';
+    TSuit.Spades: Result := 'Spades';
+  else
+    Result := '';
+  end;
+end;{$LINE 20}
+
+type
+  TLocal{$LINE 24} = (Near, Far);
+  TLocalHelper = record helper for TLocal
+    function ToString: string;
+  end;{$LINE 24}
+
+function TLocalHelper.ToString: string;
+begin
+  case Self of
+    TLocal.Near: Result := 'Near';
+    TLocal.Far:  Result := 'Far';
+  else
+    Result := '';
+  end;
+end;{$LINE 24}
+
+function Describe(S: TSize): string;
+begin
+  Result := S.ToString + ' ' + TSuit.Spades.ToString + ' ' + TLocal.Far.ToString;
+end;
+
+end.
