@@ -46,8 +46,9 @@ above, but which it won't keep in the project. Either way its header may say `un
 ## Try it
 
 Needs the starter's `delphipp.exe`, built once with Delphi alone: in `..\..\delphi\`,
-`get-treesitter4d.cmd` then `build.cmd` (its README). No Python. (Or the Python side: see
-*The setting*.)
+`get-treesitter4d.cmd`, then `build.cmd` or, in the IDE, `delphipp.dproj` built for Win64 (its
+README). Either puts it in `..\..\delphi\bin\`, where this project's event looks. No Python.
+(Or the Python side: see *The setting*.)
 
 1. Open `Hello.dproj` in Delphi 13 and build it (Win32 or Win64). `Greet.pas` appears; the
    program prints `Bonjour, Delphi! Bonjour, Delphi!` and `G'day, Delphi!`.

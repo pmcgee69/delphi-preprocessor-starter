@@ -22,7 +22,10 @@ no Python.
 
 Or in the IDE: open `delphipp.dproj` and build, Win64 or Win32. It builds into the same
 `bin\` and `bin\win32\` as `build.cmd`, with TreeSitter4D's units on its search path
-(`get-treesitter4d.cmd` first, as for `build.cmd`).
+(`get-treesitter4d.cmd` first, as for `build.cmd`). `..\examples\ide\`'s pre-build event runs
+`bin\delphipp.exe`, the Win64 build. The project is only `delphipp.dpr` (`RunTests` is still
+`build.cmd`'s); the `.res` the IDE writes beside it is unused, as the program has no `{$R}`,
+and ignored by git.
 
 `get-treesitter4d.cmd` uses what Windows 10 and later have (git, curl, certutil, tar): it
 clones TreeSitter4D at its release tag for `TreeSitter.Api.pas`, downloads the release's

@@ -15,6 +15,11 @@ examples/ide/Win32/
 examples/ide/Win64/
 examples/ide/__history/
 examples/ide/__recovery/
+
+# delphi: the .res the IDE writes on opening delphipp.dproj (the program has no {$R}), and its histories
+delphi/delphipp.res
+delphi/__history/
+delphi/__recovery/
 *.dproj.local
 *.identcache
 *.delphilsp.json

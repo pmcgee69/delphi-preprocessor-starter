@@ -68,7 +68,8 @@ bin\delphipp.exe --list              rem the rules
 bin\delphipp.exe ..\tests\cases\with rem run them over a file or folder
 ```
 
-More in [`delphi\README.md`](delphi/README.md).
+Or build `delphipp.exe` in the IDE: after `get-treesitter4d.cmd`, open `delphi\delphipp.dproj`
+and build it. It writes to the same `bin\` as `build.cmd`. More in [`delphi\README.md`](delphi/README.md).
 
 **With Python** 3.10 or later (64-bit or 32-bit), on Windows:
 
