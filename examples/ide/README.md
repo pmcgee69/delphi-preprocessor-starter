@@ -14,6 +14,12 @@ Here the rules make a unit dcc would refuse into one it compiles:
 | `Assert(G.Times > 0)` | `Assert(G.Times > 0, 'Greet.dpps:26: G.Times > 0')` (`assert-message`) |
 | footnotes after `end.`: `[Greeting] A greeting for G, …`, with `G:` and `Result:` lines | XMLDoc above `TGreeting` and `Greeting`, for Help Insight, and nothing after `end.` (`footnotes`) |
 
+The footnotes at the foot of `Greet.dpps` (below), and Help Insight on `Greeting` in
+`Hello.dpr` (above), built from them: the summary, the parameter and the result, and a link to
+`Greet.dpps` itself, at the line `{$LINE}` gives it (Delphi 13, 12 Nov 2026):
+
+![Help Insight on Greeting in Hello.dpr, from the footnotes after end. in Greet.dpps](footnotes-help-insight.png)
+
 ## Highlighting `.dpps` in the IDE
 
 Once per machine, add `dpps` to the extensions the IDE reads as Delphi. Delphi 13's Options

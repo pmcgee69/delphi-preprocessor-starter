@@ -35,7 +35,9 @@ install: a project setting, and one editor setting so the IDE highlights `.dpps`
 [`examples\ide\`](examples/ide/) is a project to open and build, with a `case` on strings that
 the rules make into Delphi dcc accepts. dcc's own errors name the `.dpps` and its lines too
 (the generated `.pas` carries dcc's `{$LINE N 'file'}`), so a double-click opens the source
-and the debugger steps through it: [the video](https://youtu.be/LJM2JrihDWU).
+and the debugger steps through it: [the video](https://youtu.be/LJM2JrihDWU). Its footnotes
+after `end.` become XMLDoc, so Help Insight on `Greeting` shows the summary, the parameter and
+the result written there ([the screenshot](examples/ide/footnotes-help-insight.png)).
 
 ## New to it? 
 Start with the hand-held walkthrough:
