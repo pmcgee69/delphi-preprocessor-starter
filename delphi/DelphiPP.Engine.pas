@@ -498,7 +498,13 @@ begin
     begin
       const E = Edits[I];
       var Text := E.Bytes;
-      if Newlines(Text, 0, Length(Text)) <> Newlines(Source, E.StartByte, E.EndByte) then
+      // none when nothing but blanks follows: after end., where the footnotes went, dcc
+      // would warn of text after it, W1011
+      var Blank := True;
+      for var K := E.EndByte to High(Source) do
+        Blank := Blank and (Source[K] in [9..13, 32]);     // Python's bytes.strip
+      if (Newlines(Text, 0, Length(Text)) <> Newlines(Source, E.StartByte, E.EndByte)) and
+         not Blank then
         // the source's lines again from the line after the edit's end
         Text := Text + Encoding.GetBytes(Format('{$LINE %d}', [Newlines(Source, 0, E.EndByte) + 2]));
       Result := Copy(Result, 0, E.StartByte) + Text +

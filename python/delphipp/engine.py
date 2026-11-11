@@ -167,7 +167,9 @@ def with_lines(raw: bytes, edits, filename: str) -> bytes:
     out = raw
     for e in reversed(edits):
         text = e.text
-        if text.count(b'\n') != raw.count(b'\n', e.start, e.end):
+        # (none when nothing but blanks follows: after end., where the footnotes went, dcc
+        # would warn of text after it, W1011)
+        if text.count(b'\n') != raw.count(b'\n', e.start, e.end) and raw[e.end:].strip():
             # the source's lines again from the line after the edit's end
             line = raw.count(b'\n', 0, e.end) + 2
             text += f'{{$LINE {line}}}'.encode(encoding)

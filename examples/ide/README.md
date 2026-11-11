@@ -12,6 +12,7 @@ Here the rules make a unit dcc would refuse into one it compiles:
 | two `uses` clauses, each with its comment | one clause (`uses-merge`) |
 | `case G.Lang of 'en': … 'fr': …` (a `case` on strings) | an `if` chain (`case-of`) |
 | `Assert(G.Times > 0)` | `Assert(G.Times > 0, 'Greet.dpps:26: G.Times > 0')` (`assert-message`) |
+| footnotes after `end.`: `[Greeting] A greeting for G, …`, with `G:` and `Result:` lines | XMLDoc above `TGreeting` and `Greeting`, for Help Insight, and nothing after `end.` (`footnotes`) |
 
 ## Highlighting `.dpps` in the IDE
 

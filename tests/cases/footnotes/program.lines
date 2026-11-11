@@ -17,4 +17,3 @@ end;
 begin
   Writeln(Square(3));
 end.
-{$LINE 22}
