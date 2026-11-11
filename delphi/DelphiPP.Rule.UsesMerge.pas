@@ -30,8 +30,10 @@ unit DelphiPP.Rule.UsesMerge;
 
   THE EDITS: for each clause straight after another, the earlier one's `;`
   becomes `,` and the later one's `uses` goes (a space in its place when a unit
-  follows on its line, for the indent). Nothing else changes: comments, line
-  breaks and spacing stay where they were.
+  follows on its line, for the indent). When the `uses` is alone on its line
+  and no comment lies between the clauses, everything from the `;` to the
+  `uses` becomes `,`, so no empty line is left between the units. Nothing else
+  changes: comments, other line breaks and spacing stay where they were.
 
   WHAT IT LEAVES ALONE: clauses with a compiler directive between them, such as
   $IFDEF MSWINDOWS. They may be alternatives, one per platform, which Delphi
@@ -88,9 +90,11 @@ end;
 procedure TUsesMerge.Visit(const Node: TNode; Ctx: TContext);
 var
   Prev    : TNode;       // the clause before, while only comments follow it
-  HasPrev : Boolean;
+  HasPrev   : Boolean;
+  Commented : Boolean;   // a comment since the clause before
 begin
-  HasPrev := False;
+  HasPrev   := False;
+  Commented := False;
   // the units of the clauses merged so far: one run, with nothing but comments between
   var Seen := TDictionary<string, Boolean>.Create;
   try
@@ -111,18 +115,28 @@ begin
           end;
         if HasPrev then
         begin
-          Ctx.Replace(Semicolon(Prev), ',');
-          // its `uses`: a space where a unit follows on the same line, so
-          // `uses System.Types;` becomes `  System.Types;`
-          if C.Child(1).Line = C.Child(0).Line then
-            Ctx.Replace(C.Child(0), ' ')
+          const SameLine = C.Child(1).Line = C.Child(0).Line;
+          if SameLine or Commented then
+          begin
+            Ctx.Replace(Semicolon(Prev), ',');
+            // its `uses`: a space where a unit follows on the same line, so
+            // `uses System.Types;` becomes `  System.Types;`
+            if SameLine then
+              Ctx.Replace(C.Child(0), ' ')
+            else
+              Ctx.Replace(C.Child(0), '');
+          end
           else
-            Ctx.Replace(C.Child(0), '');
+            // only blanks between: the `uses` line goes with them
+            Ctx.ReplaceSpan(Semicolon(Prev), C.Child(0), ',');
         end;
-        Prev    := C;
-        HasPrev := True;
+        Prev      := C;
+        HasPrev   := True;
+        Commented := False;
       end
-      else if C.Kind <> 'comment' then
+      else if C.Kind = 'comment' then
+        Commented := True
+      else
       begin
         // a directive (maybe alternatives follow) or a declaration: the run is over
         HasPrev := False;

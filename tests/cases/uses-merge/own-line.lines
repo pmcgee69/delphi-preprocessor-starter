@@ -1,0 +1,12 @@
+{$LINE 1 'own-line.dpps'}
+unit UsesOwnLine;
+
+interface
+
+uses
+  System.SysUtils, System.Diagnostics,   {$LINE 9}
+  System.StrUtils;
+
+implementation
+
+end.

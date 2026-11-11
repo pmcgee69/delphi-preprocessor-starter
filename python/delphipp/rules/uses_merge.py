@@ -11,7 +11,9 @@ syntax is needed.
 
 For each clause straight after another, the earlier one's `;` becomes `,` and
 the later one's `uses` goes (a space in its place when a unit follows on its
-line, for the indent). Nothing else changes.
+line, for the indent). When the `uses` is alone on its line and no comment
+lies between the clauses, everything from the `;` to the `uses` becomes `,`,
+so no empty line is left between the units. Nothing else changes.
 
 Clauses with a compiler directive between them are left alone: they may be
 alternatives, one per platform, which Delphi allows and its own RTL does; if
@@ -27,6 +29,7 @@ class UsesMerge:
     def visit(self, node, ctx):
         prev = None                 # the clause before, while only comments follow it
         seen = set()                # the units of the clauses in this run
+        commented = False           # a comment since the clause before
         for c in node.children:
             if c.type == 'declUses':
                 for u in c.children:
@@ -37,12 +40,19 @@ class UsesMerge:
                         else:
                             seen.add(name.lower())
                 if prev is not None:
-                    ctx.replace(prev.children[-1], ',')
                     uses = c.children[0]
                     same_line = c.children[1].start_point[0] == uses.start_point[0]
-                    ctx.replace(uses, ' ' if same_line else '')
+                    if same_line or commented:
+                        ctx.replace(prev.children[-1], ',')
+                        ctx.replace(uses, ' ' if same_line else '')
+                    else:
+                        # only blanks between: the `uses` line goes with them
+                        ctx.replace_span(prev.children[-1], uses, ',')
                 prev = c
-            elif c.type != 'comment':
+                commented = False
+            elif c.type == 'comment':
+                commented = True
+            else:
                 # a directive (maybe alternatives follow) or a declaration: the run is over
                 prev = None
                 seen.clear()
