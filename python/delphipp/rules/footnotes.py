@@ -29,7 +29,9 @@ MODULES = ('unit', 'program', 'library')
 
 
 def xml(text):
-    return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    """As XML; and '' is ', as in a string: the IDE highlights the text after end. as code, so a
+    lone ' would start a string to the end of the line (user, 12 Nov: G'day written G''day)."""
+    return text.replace("''", "'").replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 
 class Note:

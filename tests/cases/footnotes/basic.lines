@@ -15,7 +15,7 @@ type
     /// <param name="Times">how often.</param>
     {$LINE 10}
     function Greet(const Other: string; Times: Integer): string;
-    /// <summary>The person's name.</summary>
+    /// <summary>The person's name, ' written as in a string.</summary>
     {$LINE 11}
     property Name: string read FName;
   end;

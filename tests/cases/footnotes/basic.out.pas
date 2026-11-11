@@ -12,7 +12,7 @@ type
     /// <param name="Other">who.</param>
     /// <param name="Times">how often.</param>
     function Greet(const Other: string; Times: Integer): string;
-    /// <summary>The person's name.</summary>
+    /// <summary>The person's name, ' written as in a string.</summary>
     property Name: string read FName;
   end;
 

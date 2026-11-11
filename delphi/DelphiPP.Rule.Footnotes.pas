@@ -102,9 +102,11 @@ begin
   Exit( 'A rewrite: footnotes after end. become XMLDoc on what they name.' );
 end;
 
+// as XML; and '' is ', as in a string: the IDE highlights the text after end. as code, so a
+// lone ' would start a string to the end of the line (user, 12 Nov: G'day written G''day)
 function Xml(const Text: string): string;
 begin
-  Exit( Text.Replace('&', '&amp;').Replace('<', '&lt;').Replace('>', '&gt;') );
+  Exit( Text.Replace('''''', '''').Replace('&', '&amp;').Replace('<', '&lt;').Replace('>', '&gt;') );
 end;
 
 // the footnotes in the text after `end.`; False when it doesn't start with one

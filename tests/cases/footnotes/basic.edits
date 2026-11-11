@@ -1,6 +1,6 @@
 31-31 [footnotes] /// <summary>Someone who can be greeted.</summary>\n  
 89-89 [footnotes] /// <summary>Greets another.</summary>\n    /// <param name="Other">who.</param>\n    /// <param name="Times">how often.</param>\n    
-154-154 [footnotes] /// <summary>The person's name.</summary>\n    
+154-154 [footnotes] /// <summary>The person's name, ' written as in a string.</summary>\n    
 196-196 [footnotes] /// <summary>Says hello to Name, Times times, in the language of the day.</summary>\n/// <param name="Name">who to greet.</param>\n/// <param name="Times">how often; at least 1 (and &lt; 10 &amp; &gt; 0).</param>\n/// <returns>the greeting.</returns>\n
 276-276 [footnotes] /// <summary>Twice the sum, a routine of the implementation's own.</summary>\n/// <param name="A">one.</param>\n/// <param name="B">the other.</param>\n
-566-968 [footnotes] .\n
+566-996 [footnotes] .\n

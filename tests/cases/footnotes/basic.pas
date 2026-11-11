@@ -44,7 +44,7 @@ end.
   Other: who.
   Times: how often.
 
-[TPerson.Name] The person's name.
+[TPerson.Name] The person''s name, '' written as in a string.
 
 [Twice] Twice the sum, a routine of the implementation's own.
   A: one.
