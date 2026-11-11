@@ -148,6 +148,46 @@ The two checks, `with` and `with-try`, are written but switched off: they are le
 - **`double-quotes`** (`python\delphipp\rules\double_quotes.py`), a rewrite, the simplest
   there is, to learn from rather than to use: each `"` inside a string becomes `''`, so
   `'say "hi"'` becomes `'say ''hi'''`. One kind of node, and its whole text replaced.
+- **`footnotes`** (`python\delphipp\rules\footnotes.py`), a rewrite: footnotes after `end.`
+  become XMLDoc on what they name, for Help Insight, and leave the `.pas`. A footnote names a
+  routine, a type or a member (`[TPerson.Greet]`); an indented `Name:` line describes a
+  parameter, `Result:` a function's result:
+
+  ```pascal
+  function Greeting(const Name: string): string;     /// <summary>Says hello.</summary>
+  ...                                                 /// <param name="Name">who to greet.</param>
+  end.                                       ->       function Greeting(const Name: string): string;
+                                                      ...
+  [Greeting] Says hello.                              end.
+    Name: who to greet.
+  ```
+
+  A name declared nowhere or overloaded, a parameter the routine doesn't have, or XMLDoc
+  already there is an error. Text after `end.` that doesn't start with a footnote is left alone.
+- **`derive`** (`python\delphipp\rules\derive.py`), a rewrite: `[Derive(ToString)]` on an
+  enumeration writes it a `ToString`, as a record helper, with the names qualified so
+  `{$SCOPEDENUMS ON}` changes nothing:
+
+  ```pascal
+  type                                    type
+    [Derive(ToString)]                      TSize = (Small, Large);
+    TSize = (Small, Large);       ->        TSizeHelper = record helper for TSize
+                                              function ToString: string;
+                                            end;
+                                          ...
+                                          function TSizeHelper.ToString: string;
+                                          begin
+                                            case Self of
+                                              TSize.Small: Result := 'Small';
+                                              TSize.Large: Result := 'Large';
+                                            else
+                                              Result := '';
+                                            end;
+                                          end;
+  ```
+
+  An attribute is Delphi already, so the grammar parses it. A helper of the type's own would
+  hide this one (a type has one in scope at a time). `ToString` is the only one so far.
 
 `uses-merge`, `case-of` and `auto-property` come from Vincent Parrett's
 [*Delphi language enhancements*](https://www.finalbuilder.com/resources/blogs/delphi-language-enhancements)

@@ -16,8 +16,10 @@ from .uses_merge       import UsesMerge
 from .case_of          import CaseOf
 from .auto_property    import AutoProperty
 from .double_quotes    import DoubleQuotes
+from .footnotes        import Footnotes
+from .derive           import Derive
 
-ALL = [AssertMessage, UsesMerge, CaseOf, AutoProperty, DoubleQuotes]
+ALL = [AssertMessage, UsesMerge, CaseOf, AutoProperty, DoubleQuotes, Footnotes, Derive]
 
 
 def by_name(names=None):

@@ -4,13 +4,14 @@
 project's pre-build event runs them and writes `Greet.pas` beside it; the IDE then builds as
 usual. No IDE package, nothing installed: a project setting.
 
-Here two rules make a unit dcc would refuse into one it compiles:
+Here the rules make a unit dcc would refuse into one it compiles:
 
 | In `Greet.dpps` | In `Greet.pas`, written from it |
 |---|---|
 | `unit Greet.dpps;`, so the IDE's tabs and lists tell the two apart | `unit Greet;` |
+| two `uses` clauses, each with its comment | one clause (`uses-merge`) |
 | `case G.Lang of 'en': … 'fr': …` (a `case` on strings) | an `if` chain (`case-of`) |
-| `Assert(G.Times > 0)` | `Assert(G.Times > 0, 'Greet.dpps:24: G.Times > 0')` (`assert-message`) |
+| `Assert(G.Times > 0)` | `Assert(G.Times > 0, 'Greet.dpps:26: G.Times > 0')` (`assert-message`) |
 
 ## Highlighting `.dpps` in the IDE
 
@@ -57,7 +58,7 @@ README). Either puts it in `..\..\delphi\bin\`, where this project's event looks
    Messages pane lists the rule's error on `Greet.dpps`, line and column:
 
    ```
-   Greet.dpps(31,5): error DPPS-case-of: a range label in a case on strings or class types: write it as an if
+   Greet.dpps(33,5): error DPPS-case-of: a range label in a case on strings or class types: write it as an if
    ```
 
    MSBuild adds a line of its own after it, that the command "exited with code 1". `Greet.pas`

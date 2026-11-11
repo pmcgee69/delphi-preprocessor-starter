@@ -1,0 +1,9 @@
+31-57 [derive] TSize
+83-83 [derive] \n  TSizeHelper = record helper for TSize\n    function ToString: string;\n  end;
+111-137 [derive] TSuit
+165-165 [derive] \n  TSuitHelper = record helper for TSuit\n    function ToString: string;\n  end;
+244-244 [derive] \n\nfunction TSizeHelper.ToString: string;\nbegin\n  case Self of\n    TSize.Small:  Result := 'Small';\n    TSize.Medium: Result := 'Medium';\n    TSize.Large:  Result := 'Large';\n  else\n    Result := '';\n  end;\nend;
+244-244 [derive] \n\nfunction TSuitHelper.ToString: string;\nbegin\n  case Self of\n    TSuit.Hearts: Result := 'Hearts';\n    TSuit.Spades: Result := 'Spades';\n  else\n    Result := '';\n  end;\nend;
+253-280 [derive] TLocal
+295-295 [derive] \n  TLocalHelper = record helper for TLocal\n    function ToString: string;\n  end;
+295-295 [derive] \n\nfunction TLocalHelper.ToString: string;\nbegin\n  case Self of\n    TLocal.Near: Result := 'Near';\n    TLocal.Far:  Result := 'Far';\n  else\n    Result := '';\n  end;\nend;

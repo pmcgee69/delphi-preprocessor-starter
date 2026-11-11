@@ -1,0 +1,3 @@
+63-90 [derive] TLight
+113-113 [derive] \n  TLightHelper = record helper for TLight\n    function ToString: string;\n  end;
+113-113 [derive] \n\nfunction TLightHelper.ToString: string;\nbegin\n  case Self of\n    TLight.Red:   Result := 'Red';\n    TLight.Amber: Result := 'Amber';\n    TLight.Green: Result := 'Green';\n  else\n    Result := '';\n  end;\nend;

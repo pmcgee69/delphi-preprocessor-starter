@@ -57,9 +57,18 @@ class Context:
         r, c = node.start_point
         self.messages.append(Message(level, r + 1, c + 1, text, self.rule))
 
+    def report_at(self, line: int, col: int, text: str, level: str = 'warning'):
+        """At a line and column (from 1) inside a node's text, where no node of its own is:
+        a line of the footnotes after `end.`."""
+        self.messages.append(Message(level, line, col, text, self.rule))
+
     # --- proposing edits -------------------------------------------------
     def replace(self, node, text: str):
         self._edit(node.start_byte, node.end_byte, text)
+
+    def replace_span(self, first, last, text: str):
+        """From the start of one node to the end of a later one, with what lies between."""
+        self._edit(first.start_byte, last.end_byte, text)
 
     def insert_before(self, node, text: str):
         self._edit(node.start_byte, node.start_byte, text)

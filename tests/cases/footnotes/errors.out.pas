@@ -1,0 +1,34 @@
+unit Errors;
+
+interface
+
+procedure Hidden;
+procedure Twice(A: Integer); overload;
+procedure Twice(A, B: Integer); overload;
+/// <summary>Documented already.</summary>
+procedure Done;
+procedure Fine(A: Integer);
+
+implementation
+
+procedure Hidden;
+begin
+end;
+
+procedure Twice(A: Integer);
+begin
+end;
+
+procedure Twice(A, B: Integer);
+begin
+end;
+
+procedure Done;
+begin
+end;
+
+procedure Fine(A: Integer);
+begin
+end;
+
+end.

@@ -42,6 +42,8 @@ Everything lands in `delphi\TreeSitter4D\`, which git ignores.
 | `DelphiPP.Rule.CaseOf.pas` | the `case-of` rewrite: `case` on strings or class types, as an `if` chain |
 | `DelphiPP.Rule.AutoProperty.pas` | the `auto-property` rewrite: a property with no `read` or `write` gains a field and both |
 | `DelphiPP.Rule.DoubleQuotes.pas` | the `double-quotes` rewrite, the simplest: each `"` inside a string becomes `''` |
+| `DelphiPP.Rule.Footnotes.pas` | the `footnotes` rewrite: footnotes after `end.` become XMLDoc on what they name |
+| `DelphiPP.Rule.Derive.pas` | the `derive` rewrite: `[Derive(ToString)]` on an enumeration writes it a `ToString` |
 | `DelphiPP.Rules.pas` | the list of rules: add yours here |
 | `delphipp.dpr` | the command line |
 | `RunTests.dpr` | the tests |

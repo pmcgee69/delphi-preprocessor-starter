@@ -1,0 +1,6 @@
+36:2: error: footnote [Missing]: no routine, method or type Missing is declared in this file [footnotes]
+38:2: error: footnote [Twice]: Twice is declared 2 times (an overload?): a footnote can't tell which [footnotes]
+40:2: error: footnote [Done]: Done has XMLDoc (///) above it already [footnotes]
+43:3: error: footnote [Hidden]: Hidden isn't a function: Result has nothing to describe [footnotes]
+47:3: error: footnote [Fine]: Fine has no parameter B [footnotes]
+49:2: error: footnote [Fine]: a second footnote for Fine [footnotes]

@@ -1,0 +1,5 @@
+6:4: error: Derive(ToString) is for enumerations [derive]
+11:4: error: Derive doesn't know Parse: ToString is the only one so far [derive]
+14:3: error: Derive with other attributes: give it brackets of its own [derive]
+17:4: error: Derive with nothing to derive: write Derive(ToString) [derive]
+24:3: error: Derive on a type local to a routine: a local type can't have a helper; declare it outside [derive]

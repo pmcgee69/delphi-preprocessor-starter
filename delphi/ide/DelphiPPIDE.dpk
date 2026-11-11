@@ -24,6 +24,8 @@ contains
   DelphiPP.Rule.CaseOf in '..\DelphiPP.Rule.CaseOf.pas',
   DelphiPP.Rule.AutoProperty in '..\DelphiPP.Rule.AutoProperty.pas',
   DelphiPP.Rule.DoubleQuotes in '..\DelphiPP.Rule.DoubleQuotes.pas',
+  DelphiPP.Rule.Footnotes in '..\DelphiPP.Rule.Footnotes.pas',
+  DelphiPP.Rule.Derive in '..\DelphiPP.Rule.Derive.pas',
   TreeSitter.Api in '..\TreeSitter4D\delphi\TreeSitter.Api.pas';
 
 end.

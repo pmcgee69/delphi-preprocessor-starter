@@ -67,7 +67,12 @@ type
     destructor Destroy; override;
     function Text(const Node: TNode): string;
     procedure Report(const Node: TNode; const Text: string; const Level: string = 'warning');
+    // at a line and column (from 1) inside a node's text, where no node of its own is:
+    // a line of the footnotes after `end.`
+    procedure ReportAt(Line, Col: Integer; const Text: string; const Level: string = 'warning');
     procedure Replace(const Node: TNode; const Text: string);
+    // from the start of one node to the end of a later one, with what lies between
+    procedure ReplaceSpan(const First, Last: TNode; const Text: string);
     procedure InsertBefore(const Node: TNode; const Text: string);
     procedure InsertAfter(const Node: TNode; const Text: string);
     property FileName: string read FFileName;
@@ -196,6 +201,18 @@ begin
   FMessages.Add(M);
 end;
 
+procedure TContext.ReportAt(Line, Col: Integer; const Text: string; const Level: string);
+var
+  M: TMessage;
+begin
+  M.Level := Level;
+  M.Line  := Line;
+  M.Col   := Col;
+  M.Text  := Text;
+  M.Rule  := Rule;
+  FMessages.Add(M);
+end;
+
 procedure TContext.AddEdit(StartByte, EndByte: Integer; const Text: string);
 var
   E: TEdit;
@@ -210,6 +227,11 @@ end;
 procedure TContext.Replace(const Node: TNode; const Text: string);
 begin
   AddEdit(Node.StartByte, Node.EndByte, Text);
+end;
+
+procedure TContext.ReplaceSpan(const First, Last: TNode; const Text: string);
+begin
+  AddEdit(First.StartByte, Last.EndByte, Text);
 end;
 
 procedure TContext.InsertBefore(const Node: TNode; const Text: string);
