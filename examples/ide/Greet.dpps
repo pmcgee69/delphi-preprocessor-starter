@@ -5,6 +5,11 @@ unit Greet.dpps;
 
 interface
 
+uses
+  System.SysUtils, System.Diagnostics;
+uses
+  System.StrUtils;
+
 type
   TGreeting = record
     Name  : string;
@@ -15,11 +20,6 @@ type
 function Greeting(const G: TGreeting): string;
 
 implementation
-
-uses
-  System.SysUtils;                // Format, TrimRight
-uses
-  System.StrUtils;                // DupeString. uses-merge: two clauses, which dcc refuses, as one
 
 function Greeting(const G: TGreeting): string;
 begin
@@ -38,3 +38,6 @@ begin
 end;
 
 end.
+
+
+
