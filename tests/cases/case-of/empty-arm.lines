@@ -1,0 +1,22 @@
+{$LINE 2 'empty-arm.dpps'}program CaseEmptyArm;
+
+{ An arm with no statement, which Delphi allows: an empty then. Typed half way
+  in the IDE (user, 7 Nov), `1 :` before the else crashed the rule on both sides. }
+
+{$APPTYPE CONSOLE}
+
+function Code(const s: string): Integer;
+begin
+  Result := 0;
+  if s = 'skip' then
+  else if s = 'one' then
+    Result := 1
+  else if s = 'none' then
+  else
+    Result := -1;{$LINE 18}
+end;
+
+begin
+  Writeln(Code('skip'), ' ', Code('one'), ' ', Code('none'), ' ', Code('x'));
+  Readln;
+end.

@@ -90,6 +90,13 @@ function Run(const Source: TBytes; const Rules: TArray<TRule>; const FileName: s
 function RunWithEdits(const Source: TBytes; const Rules: TArray<TRule>; const FileName: string;
                       out Output: TBytes; out Edits: TArray<TEdit>): TArray<TMessage>;
 
+// the output again (Edits as RunWithEdits gives them), with dcc's {$LINE N 'file'}, so dcc's
+// messages, Assert's text and the debugger name FileName and its lines, not the output's:
+// one at the top, naming it, and one after each edit that changes the number of lines.
+// {$LINE N} makes the next line N and the rest of its own line N - 1, so none adds a line.
+// FileName is left out ('' or a name the directive can't hold): the lines are still right
+function WithLines(const Source: TBytes; const Edits: TArray<TEdit>; const FileName: string): TBytes;
+
 // the file's tree as text, a node a line, indented by depth: each node's Kind
 // (what a rule's Kinds lists), its line, and a leaf's text. The first step of
 // writing a rule: find the kind of node it is about (delphipp --tree FILE)
@@ -444,6 +451,49 @@ begin
     ts_parser_delete(Parser);
     if not TEncoding.IsStandardEncoding(Encoding) then
       Encoding.Free;                    // the Windows-1252 one is made for this file
+  end;
+end;
+
+function Newlines(const Bytes: TBytes; StartByte, EndByte: Integer): Integer;
+begin
+  Result := 0;
+  for var I := StartByte to EndByte - 1 do
+    if Bytes[I] = 10 then
+      Inc(Result);
+end;
+
+function WithLines(const Source: TBytes; const Edits: TArray<TEdit>; const FileName: string): TBytes;
+begin
+  var Encoding := SourceEncoding(Source);
+  try
+    // a name in quotes, which ends at the first quote ('' isn't one), in the file's encoding
+    var Name := FileName;
+    if Name.Contains('''') or Name.Contains('}') or
+       (Encoding.GetString(Encoding.GetBytes(Name)) <> Name) then
+      Name := '';
+    Result := Copy(Source);
+    for var I := High(Edits) downto 0 do
+    begin
+      const E = Edits[I];
+      var Text := E.Bytes;
+      if Newlines(Text, 0, Length(Text)) <> Newlines(Source, E.StartByte, E.EndByte) then
+        // the source's lines again from the line after the edit's end
+        Text := Text + Encoding.GetBytes(Format('{$LINE %d}', [Newlines(Source, 0, E.EndByte) + 2]));
+      Result := Copy(Result, 0, E.StartByte) + Text +
+                Copy(Result, E.EndByte, Length(Result) - E.EndByte);
+    end;
+    if Name <> '' then
+    begin
+      // before everything but a UTF-8 BOM: line 1 is then 1, of the file named
+      var At := 0;
+      if (Length(Source) >= 3) and (Source[0] = $EF) and (Source[1] = $BB) and (Source[2] = $BF) then
+        At := 3;
+      Result := Copy(Result, 0, At) + Encoding.GetBytes(Format('{$LINE 2 ''%s''}', [Name])) +
+                Copy(Result, At, Length(Result) - At);
+    end;
+  finally
+    if not TEncoding.IsStandardEncoding(Encoding) then
+      Encoding.Free;
   end;
 end;
 
