@@ -129,7 +129,7 @@ Greet.dpps(35): error E2003: Undeclared identifier: 'Undefined1' [...\Hello.dpro
 where it was `Greet.pas(37)`. In the IDE (Delphi 13, 11 Nov 2026), a mistake on line 26 shows
 in the Messages pane as `[dcc64 Error] Greet.dpps(26): E2008 Incompatible types`;
 double-clicking it opens `Greet.dpps` at that line, and stepping into the unit in the debugger
-shows `Greet.dpps`.
+shows `Greet.dpps`. The [video](https://youtu.be/LJM2JrihDWU) shows it.
 
 - **Inside a rewritten statement the lines are near, not exact**: the `if` chain `case-of`
   writes, with the comment it moves, has nine lines for the `case`'s seven, numbered on from

@@ -33,7 +33,9 @@ writes the `.pas` the program uses from it (`X.dpps` gives `X.pas`); the IDE bui
 and a rule's errors and warnings are in the Messages pane, on the source's line. No package to
 install: a project setting, and one editor setting so the IDE highlights `.dpps` as Delphi.
 [`examples\ide\`](examples/ide/) is a project to open and build, with a `case` on strings that
-the rules make into Delphi dcc accepts.
+the rules make into Delphi dcc accepts. dcc's own errors name the `.dpps` and its lines too
+(the generated `.pas` carries dcc's `{$LINE N 'file'}`), so a double-click opens the source
+and the debugger steps through it: [the video](https://youtu.be/LJM2JrihDWU).
 
 ## New to it? 
 Start with the hand-held walkthrough:
