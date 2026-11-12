@@ -12,8 +12,9 @@ uses
 
 const
   // the rules the pre-build event runs: the Python side's ALL (with and with-try
-  // are written but switched off there)
-  ShownRules = 'assert-message,uses-merge,case-of,auto-property,double-quotes';
+  // are written but switched off there). footnotes and derive came 11 Nov and weren't
+  // here till 12 Nov (user: "[derive] doesn't have any rewrite indicator onscreen")
+  ShownRules = 'assert-message,uses-merge,case-of,auto-property,double-quotes,footnotes,derive';
 
 type
   TMark = (mkEdit, mkInsert, mkError, mkWarning, mkHint);   // mkInsert: text added at Col1
