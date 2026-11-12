@@ -10,24 +10,22 @@ const
 
 function Greet(const s: string): Integer;
 begin
-  if (s = 'hello') or (s = 'hi') then
-    Result := 1
-  else if s = sWorld then
-    begin Result := 3; end
-  else
-    begin
-      Writeln('  (no match for ', s, ')');
-      Result := 0
-    end;
+  begin
+    if (s = 'hello') or (s = 'hi') then Result := 1
+    else if s = sWorld then begin Result := 3; end
+  else begin
+    Writeln('  (no match for ', s, ')');
+    Result := 0;
+  end end;
 end;
 
 function Kind(const x: TObject): string;
 begin
   Result := '?';
-  if x.ClassType = TStringList then
-    Result := 'a string list'
-  else if x.ClassType = TList then
-    Result := 'a list';
+  begin
+    if x.ClassType = TStringList then Result := 'a string list'
+    else if x.ClassType = TList then Result := 'a list'
+  end;
 end;
 
 function Day(d: Integer): string;

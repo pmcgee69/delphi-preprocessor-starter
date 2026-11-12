@@ -1,2 +1,12 @@
-158-316 [case-of] if (s = 'hello') or (s = 'hi') then\n    Result := 1\n  else if s = sWorld then\n    begin Result := 3; end\n  else\n    begin\n      Writeln('  (no match for ', s, ')');\n      Result := 0\n    end;
-389-498 [case-of] if x.ClassType = TStringList then\n    Result := 'a string list'\n  else if x.ClassType = TList then\n    Result := 'a list';
+158-167 [case-of] begin
+172-187 [case-of] if (s = 'hello') or (s = 'hi') then
+199-200 [case-of] 
+205-220 [case-of] else if s = sWorld then
+243-244 [case-of] 
+247-251 [case-of] else begin
+312-315 [case-of] end end
+389-408 [case-of] begin
+413-426 [case-of] if x.ClassType = TStringList then
+452-453 [case-of] 
+458-471 [case-of] else if x.ClassType = TList then
+490-491 [case-of] 

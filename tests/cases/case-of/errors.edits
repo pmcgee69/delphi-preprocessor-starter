@@ -1,1 +1,3 @@
-377-468 [case-of] // #13#10 is two characters: a string case\n  if s = #13#10 then\n    x := 7;
+377-386 [case-of] begin
+445-453 [case-of] if s = #13#10 then
+460-461 [case-of] 

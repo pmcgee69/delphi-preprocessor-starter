@@ -1,1 +1,6 @@
-271-366 [case-of] if s = 'skip' then\n  else if s = 'one' then\n    Result := 1\n  else if s = 'none' then\n  else\n    Result := -1;
+271-280 [case-of] begin
+285-293 [case-of] if s = 'skip' then
+294-295 [case-of] 
+300-308 [case-of] else if s = 'one' then
+320-321 [case-of] 
+326-334 [case-of] else if s = 'none' then

@@ -1,14 +1,22 @@
 """A rewrite: `case` on strings, or on class types, written as an `if` chain.
 
-    case s of                              if (s = 'hello') or (s = 'hi') then
-      'hello', 'hi' : x := 1;                x := 1
-      sWorld        : x := 3;      ->      else if s = sWorld then
-    else                                     x := 3
-      x := 0;                              else
-    end;                                     x := 0;
+    case s of                      begin
+      'hello', 'hi' : x := 1;        if (s = 'hello') or (s = 'hi') then x := 1
+      sWorld        : x := 3;  ->    else if s = sWorld then x := 3
+    else                           else
+      x := 0;                        x := 0;
+    end;                           end;
 
-    case x.ClassType of                    if x.ClassType = TBar then
-      TBar : x := 1;               ->        x := 1;
+    case x.ClassType of            begin
+      TBar : x := 1;           ->    if x.ClassType = TBar then x := 1
+    end;                           end;
+
+Every line stays where it was (user, 12 Nov: the if chain's lines didn't match the case's arms,
+so dcc's messages and the debugger named the wrong arm): `case … of` becomes `begin`, which the
+case's own `end` closes; each label becomes its `if … then`, the arm's statement after it on
+its line; the `;` ending an arm goes. An arm holding an `if` with no `else` is put in
+`begin … end`, or the next arm's `else` would be that `if`'s. An `else` part of several
+statements becomes `else begin … end`, closed by a second `end`.
 
 Delphi's `case` takes only ordinals; Vincent Parrett's "Delphi language
 enhancements" (VSoft, 2016) called strings in case statements the most requested
@@ -67,10 +75,24 @@ def is_string(node, ctx):
     return node.type == 'literalString' and char_count(ctx.text(node)) != 1
 
 
-def statement_text(node, ctx):
-    """A statement's text without a `;` the grammar put at its end."""
-    t = ctx.text(node).rstrip()
-    return t[:-1].rstrip() if t.endswith(';') else t
+def last_token(node):
+    """The node's last token: an arm's `;` can be deep inside it (`if A then x := 1;`)."""
+    while node.children:
+        node = node.children[-1]
+    return node
+
+
+# statements that close themselves: an `if` inside one can't take an `else` after it
+CLOSED = ('block', 'try', 'case', 'repeat', 'asm')
+
+
+def dangles(node):
+    """An `if` with no `else` that an `else` after the statement would belong to."""
+    if node.type in CLOSED:
+        return False
+    if node.type == 'if' and not any(c.type == 'kElse' for c in node.children):
+        return True
+    return any(dangles(c) for c in node.children)
 
 
 class CaseOf:
@@ -93,47 +115,51 @@ class CaseOf:
             return
 
         sel = ctx.text(selector)
-        indent = ' ' * node.start_point[1]
         nl = '\r\n' if '\r\n' in ctx.text(node) else '\n'     # the file's own line break
-        code = ''
-        first = True
-        for i, c in enumerate(kids):
-            if c.type == 'comment':
-                # a // comment's node holds the CR of a CRLF file: left in, it makes a CR CR LF,
-                # and dcc counts the lone CR as a line, so its messages' line numbers drift
-                code += ctx.text(c).rstrip('\r') + nl + indent
-            elif c.type == 'caseCase':
-                tests = []
-                for label in c.children[0].children:
-                    if label.type in (',', ':', 'comment'):
-                        continue
-                    if label.type == 'range':
-                        ctx.report(label, 'a range label in a case on strings or class types: '
-                                          'write it as an if', 'error')
-                        return
-                    tests.append(f'{sel} = {ctx.text(label)}')
-                test = tests[0] if len(tests) == 1 else '(' + ') or ('.join(tests) + ')'
-                if not first:
-                    code += nl + indent + 'else '
-                code += f'if {test} then'
-                # an arm with no statement (`1 :`, which Delphi allows) has an empty then
-                statement = statement_text(c.children[1], ctx) if len(c.children) > 1 else ''
-                if statement:
-                    code += nl + indent + '  ' + statement
-                first = False
-            elif c.type == 'kElse':
-                statements = []
-                k = i + 1
-                while kids[k].type != 'kEnd':
-                    if kids[k].type != ';':
-                        statements.append(statement_text(kids[k], ctx))
-                    k += 1
-                text = statements[0] if len(statements) == 1 else (
-                    'begin' + nl + indent + '    '
-                    + (';' + nl + indent + '    ').join(statements)
-                    + nl + indent + '  end') if statements else ''
-                code += nl + indent + 'else' + nl + indent + '  ' + text
-                break
-        if kids[-1].type == ';':
-            code += ';'
-        ctx.replace(node, code)
+        arms = [c for c in kids if c.type == 'caseCase']
+        has_else = any(c.type == 'kElse' for c in kids)
+        # each arm's test, before any edit: a range label leaves the case as it is
+        tests = []
+        for c in arms:
+            labels = c.children[0]
+            parts = []                                  # (row, column, test)
+            for label in labels.children:
+                if label.type in (',', ':', 'comment'):
+                    continue
+                if label.type == 'range':
+                    ctx.report(label, 'a range label in a case on strings or class types: '
+                                      'write it as an if', 'error')
+                    return
+                parts.append((label.start_point[0], label.start_point[1], f'{sel} = {ctx.text(label)}'))
+            if len(parts) == 1:
+                test = parts[0][2]
+            else:
+                # labels on several lines keep their line breaks, so no line moves
+                test = f'({parts[0][2]})'
+                for (row0, _, _), (row, col, t) in zip(parts, parts[1:]):
+                    test += (' or' + nl + ' ' * col if row != row0 else ' or ') + f'({t})'
+            spare = labels.end_point[0] - labels.start_point[0] - test.count('\n')
+            tests.append(f'if {test} then' + (nl * spare if spare > 0 else ''))
+
+        ctx.replace_span(kids[0], kids[2], 'begin')    # case X of
+        for n, (c, test) in enumerate(zip(arms, tests)):
+            ctx.replace(c.children[0], test if n == 0 else 'else ' + test)
+            # an arm with no statement (`'x' :`, which Delphi allows) has an empty then
+            statement = c.children[1] if len(c.children) > 1 and c.children[1].type != ';' else None
+            semicolon = last_token(c) if last_token(c).type == ';' else None
+            later = n + 1 < len(arms) or has_else
+            if statement is not None and later and dangles(statement):
+                ctx.insert_before(statement, 'begin ')
+                if semicolon is not None:
+                    ctx.replace(semicolon, ' end')
+                else:
+                    ctx.insert_after(statement, ' end')
+            elif semicolon is not None:
+                ctx.replace(semicolon, '')
+        if has_else:
+            k = next(i for i, c in enumerate(kids) if c.type == 'kElse')
+            end = next(i for i in range(k, len(kids)) if kids[i].type == 'kEnd')
+            statements = [c for c in kids[k + 1:end] if c.type not in (';', 'comment')]
+            if len(statements) > 1:
+                ctx.replace(kids[k], 'else begin')
+                ctx.replace(kids[end], 'end end')

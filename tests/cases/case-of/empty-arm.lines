@@ -9,12 +9,13 @@ program CaseEmptyArm;
 function Code(const s: string): Integer;
 begin
   Result := 0;
-  if s = 'skip' then
-  else if s = 'one' then
-    Result := 1
-  else if s = 'none' then
+  begin
+    if s = 'skip' then 
+    else if s = 'one' then Result := 1
+    else if s = 'none' then
   else
-    Result := -1;   {$LINE 18}
+    Result := -1;
+  end;
 end;
 
 begin

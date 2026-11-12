@@ -4,17 +4,26 @@ unit DelphiPP.Rule.CaseOf;
   which Delphi's `case` doesn't (only ordinals), and writes each such `case` as
   the `if` chain Delphi compiles:
 
-      case s of                              if (s = 'hello') or (s = 'hi') then
-        'hello', 'hi' : x := 1;                x := 1
-        sWorld        : x := 3;      ->      else if s = sWorld then
-      else                                     x := 3
-        x := 0;                              else
-      end;                                     x := 0;
+      case s of                      begin
+        'hello', 'hi' : x := 1;        if (s = 'hello') or (s = 'hi') then x := 1
+        sWorld        : x := 3;  ->    else if s = sWorld then x := 3
+      else                           else
+        x := 0;                        x := 0;
+      end;                           end;
 
-      case x.ClassType of                    if x.ClassType = TBar then
-        TBar : x := 1;               ->        x := 1
-        TFoo : x := 2;                       else if x.ClassType = TFoo then
-      end;                                     x := 2;
+      case x.ClassType of            begin
+        TBar : x := 1;           ->    if x.ClassType = TBar then x := 1
+        TFoo : x := 2;                 else if x.ClassType = TFoo then x := 2
+      end;                           end;
+
+  EVERY LINE STAYS WHERE IT WAS (user, 12 Nov: the if chain's lines didn't match the case's
+  arms, so dcc's messages and the debugger named the wrong arm): `case … of` becomes
+  `begin`, which the case's own `end` closes; each label becomes its `if … then`, the arm's
+  statement after it on its line; the `;` ending an arm goes. An arm holding an `if` with no
+  `else` is put in `begin … end`, or the next arm's `else` would be that `if`'s (the rule
+  before this wrote such an arm as it stood, and a case on 'one' with `if Flag then …` never
+  tested the next arm when Flag was false). An `else` part of several statements becomes
+  `else begin … end`, closed by a second `end`.
 
   WHY: Vincent Parrett's "Delphi language enhancements" (VSoft, 2016) called
   strings in case statements the most requested feature of all.
@@ -157,12 +166,43 @@ begin
   Exit( (Node.Kind = 'literalString') and (CharCount(Ctx.Text(Node)) <> 1) );
 end;
 
-// a statement's text without a `;` the grammar put at its end
-function StatementText(const Node: TNode; Ctx: TContext): string;
+// the node's last token: an arm's `;` can be deep inside it (`if A then x := 1;`)
+function LastToken(const Node: TNode): TNode;
 begin
-  Result := Ctx.Text(Node).TrimRight;
-  if Result.EndsWith(';') then
-    Result := Result.Substring(0, Result.Length - 1).TrimRight;
+  Result := Node;
+  while Result.ChildCount > 0 do
+    Result := Result.Child(Result.ChildCount - 1);
+end;
+
+// an `if` with no `else` that an `else` after the statement would belong to; statements that
+// close themselves (begin … end, try, case, repeat, asm) keep theirs inside
+function Dangles(const Node: TNode): Boolean;
+begin
+  const K = Node.Kind;
+  if (K = 'block') or (K = 'try') or (K = 'case') or (K = 'repeat') or (K = 'asm') then
+    Exit( False );
+  if K = 'if' then
+  begin
+    var HasElse := False;
+    for var I := 0 to Node.ChildCount - 1 do
+      if Node.Child(I).Kind = 'kElse' then
+        HasElse := True;
+    if not HasElse then
+      Exit( True );
+  end;
+  for var I := 0 to Node.ChildCount - 1 do
+    if Dangles(Node.Child(I)) then
+      Exit( True );
+  Exit( False );
+end;
+
+// the line breaks in a text: how many lines a node runs on past its first
+function LineBreaks(const Text: string): Integer;
+begin
+  Result := 0;
+  for var Ch in Text do
+    if Ch = #10 then
+      Inc(Result);
 end;
 
 // called once for each case statement
@@ -189,79 +229,100 @@ begin
     Exit;
   end;
 
-  const Sel    = Ctx.Text(Selector);
-  const Indent = StringOfChar(' ', Node.Column - 1);
+  const Sel = Ctx.Text(Selector);
   // the file's own line break, as the case has it
   var LineBreak: string := #10;
   if Ctx.Text(Node).Contains(#13#10) then
     LineBreak := #13#10;
-  var   Code   := '';
-  var   First  := True;
+  var Arms: TArray<TNode>;
+  var HasElse := False;
   for var I := 0 to Node.ChildCount - 1 do
+    if Node.Child(I).Kind = 'caseCase' then
+      Arms := Arms + [Node.Child(I)]
+    else if Node.Child(I).Kind = 'kElse' then
+      HasElse := True;
+
+  // each arm's test, before any edit: a range label leaves the case as it is
+  var Tests: TArray<string>;
+  for var Arm in Arms do
   begin
-    const C = Node.Child(I);
-    if C.Kind = 'comment' then
-      // a // comment's node holds the CR of a CRLF file: left in, it makes a CR CR LF, and
-      // dcc counts the lone CR as a line, so its messages' line numbers drift
-      Code := Code + Ctx.Text(C).TrimRight([#13]) + LineBreak + Indent
-    else if C.Kind = 'caseCase' then
+    const Labels = Arm.Child(0);
+    var Test     := '';
+    var Count    := 0;
+    var PrevLine := 0;
+    for var J := 0 to Labels.ChildCount - 1 do
     begin
-      // the tests: one for each label, joined by `or`
-      var Tests: TArray<string>;
-      const Labels = C.Child(0);
-      for var J := 0 to Labels.ChildCount - 1 do
+      const L = Labels.Child(J);
+      if (L.Kind = ',') or (L.Kind = ':') or (L.Kind = 'comment') then
+        Continue;
+      if L.Kind = 'range' then
       begin
-        const L = Labels.Child(J);
-        if (L.Kind = ',') or (L.Kind = ':') or (L.Kind = 'comment') then
-          Continue;
-        if L.Kind = 'range' then
-        begin
-          Ctx.Report(L, 'a range label in a case on strings or class types: ' +
-                        'write it as an if', 'error');
-          Exit;
-        end;
-        Tests := Tests + [Sel + ' = ' + Ctx.Text(L)];
+        Ctx.Report(L, 'a range label in a case on strings or class types: ' +
+                      'write it as an if', 'error');
+        Exit;
       end;
-      var Test := Tests[0];
-      if Length(Tests) > 1 then
-        Test := '(' + string.Join(') or (', Tests) + ')';
-      if not First then
-        Code := Code + LineBreak + Indent + 'else ';
-      Code  := Code + 'if ' + Test + ' then';
-      // an arm with no statement (`1 :`, which Delphi allows) has an empty then
-      var Statement := '';
-      if C.ChildCount > 1 then
-        Statement := StatementText(C.Child(1), Ctx);
-      if Statement <> '' then
-        Code := Code + LineBreak + Indent + '  ' + Statement;
-      First := False;
+      const One = '(' + Sel + ' = ' + Ctx.Text(L) + ')';
+      if Count = 0 then
+        Test := One
+      else if L.Line <> PrevLine then
+        // labels on several lines keep their line breaks, so no line moves
+        Test := Test + ' or' + LineBreak + StringOfChar(' ', L.Column - 1) + One
+      else
+        Test := Test + ' or ' + One;
+      PrevLine := L.Line;
+      Inc(Count);
+    end;
+    if Count = 1 then
+      Test := Test.Substring(1, Test.Length - 2);      // one test: no brackets
+    Test := 'if ' + Test + ' then';
+    for var S := 1 to LineBreaks(Ctx.Text(Labels)) - LineBreaks(Test) do
+      Test := Test + LineBreak;
+    Tests := Tests + [Test];
+  end;
+
+  Ctx.ReplaceSpan(Node.Child(0), Node.Child(2), 'begin');     // case X of
+  for var N := 0 to High(Arms) do
+  begin
+    const Arm = Arms[N];
+    if N = 0 then
+      Ctx.Replace(Arm.Child(0), Tests[N])
+    else
+      Ctx.Replace(Arm.Child(0), 'else ' + Tests[N]);
+    // an arm with no statement (`'x' :`, which Delphi allows) has an empty then
+    const HasStatement = (Arm.ChildCount > 1) and (Arm.Child(1).Kind <> ';');
+    const Last         = LastToken(Arm);
+    const Later        = (N < High(Arms)) or HasElse;
+    if HasStatement and Later and Dangles(Arm.Child(1)) then
+    begin
+      Ctx.InsertBefore(Arm.Child(1), 'begin ');
+      if Last.Kind = ';' then
+        Ctx.Replace(Last, ' end')
+      else
+        Ctx.InsertAfter(Arm.Child(1), ' end');
     end
-    else if C.Kind = 'kElse' then
+    else if Last.Kind = ';' then
+      Ctx.Replace(Last, '');
+  end;
+
+  // the else part: several statements go in begin … end, closed by a second end
+  if HasElse then
+  begin
+    var K := 0;
+    while Node.Child(K).Kind <> 'kElse' do
+      Inc(K);
+    var E := K;
+    while Node.Child(E).Kind <> 'kEnd' do
+      Inc(E);
+    var Statements := 0;
+    for var I := K + 1 to E - 1 do
+      if (Node.Child(I).Kind <> ';') and (Node.Child(I).Kind <> 'comment') then
+        Inc(Statements);
+    if Statements > 1 then
     begin
-      // the else part: the statements up to `end`, each kept as written
-      var Statements: TArray<string>;
-      var K := I + 1;
-      while Node.Child(K).Kind <> 'kEnd' do
-      begin
-        if Node.Child(K).Kind <> ';' then
-          Statements := Statements + [StatementText(Node.Child(K), Ctx)];
-        Inc(K);
-      end;
-      var Text := '';
-      if Length(Statements) = 1 then
-        Text := Statements[0]
-      else if Length(Statements) > 1 then
-        Text := 'begin' + LineBreak + Indent + '    ' +
-                string.Join(';' + LineBreak + Indent + '    ', Statements) +
-                LineBreak + Indent + '  end';
-      Code := Code + LineBreak + Indent + 'else' + LineBreak + Indent + '  ' + Text;
-      Break;
+      Ctx.Replace(Node.Child(K), 'else begin');
+      Ctx.Replace(Node.Child(E), 'end end');
     end;
   end;
-  // the case's own `;`, if the grammar put it inside the case
-  if Node.Child(Node.ChildCount - 1).Kind = ';' then
-    Code := Code + ';';
-  Ctx.Replace(Node, Code);
 end;
 
 end.

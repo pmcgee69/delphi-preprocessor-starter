@@ -24,9 +24,9 @@ begin
     'b'..'d'  : x := 5;
     #10, #$0D : x := 6;
   end;
-  // #13#10 is two characters: a string case
-  if s = #13#10 then
-    x := 7;
+  begin            // #13#10 is two characters: a string case
+    if s = #13#10 then x := 7
+  end;
 end;
 
 end.

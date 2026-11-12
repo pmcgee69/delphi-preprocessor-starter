@@ -1,1 +1,3 @@
-103-207 [case-of] // the comment's node holds this line's CR\r\n  if S = 'abc' then\r\n    X := 1\r\n  else\r\n    X := 0;
+103-112 [case-of] begin
+163-170 [case-of] if S = 'abc' then
+177-178 [case-of] 
