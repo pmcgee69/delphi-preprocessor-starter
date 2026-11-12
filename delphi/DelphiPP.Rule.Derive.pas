@@ -204,9 +204,10 @@ begin
   // the attribute goes, up to what follows it (the type's name, or another attribute)
   const After = DeclType.Child(Index + 1);
   Ctx.ReplaceSpan(Attrs, After, Ctx.Text(After));
+  // both insertions come from the attribute: in the {$LINE} output their lines name its
   Ctx.InsertAfter(DeclType, LineBreak + Indent + Helper + ' = record helper for ' + TypeName +
                             LineBreak + Indent + '  function ToString: string;' +
-                            LineBreak + Indent + 'end;');
+                            LineBreak + Indent + 'end;', Attrs);
   var Arms := '';
   for var V in Values do
     Arms := Arms + '    ' + TypeName + '.' + V + ':' + StringOfChar(' ', Width - Length(V)) +
@@ -219,7 +220,7 @@ begin
                           '  else' + LineBreak +
                           '    Result := '''';' + LineBreak +
                           '  end;' + LineBreak +
-                          'end;');
+                          'end;', Attrs);
 end;
 
 // called once for each module: each type section's types, and the routines' own

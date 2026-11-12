@@ -4,16 +4,16 @@ unit Basic;
 interface
 
 type
-  TSize   {$LINE 8} = (Small, Medium, Large);
-  TSizeHelper = record helper for TSize
-    function ToString: string;
+  TSize   {$LINE 8} = (Small, Medium, Large);   {$LINE 6}
+  TSizeHelper = record helper for TSize   {$LINE 6}
+    function ToString: string;   {$LINE 6}
   end;   {$LINE 8}
 
   TPlain = (One, Two);
 
-  TSuit   {$LINE 13} = (Hearts = 1, Spades = 4);
-  TSuitHelper = record helper for TSuit
-    function ToString: string;
+  TSuit   {$LINE 13} = (Hearts = 1, Spades = 4);   {$LINE 11}
+  TSuitHelper = record helper for TSuit   {$LINE 11}
+    function ToString: string;   {$LINE 11}
   end;   {$LINE 13}
 
 function Describe(S: TSize): string;
@@ -21,43 +21,43 @@ function Describe(S: TSize): string;
 implementation
 
 uses
-  System.SysUtils;
-
-function TSizeHelper.ToString: string;
-begin
-  case Self of
-    TSize.Small:  Result := 'Small';
-    TSize.Medium: Result := 'Medium';
-    TSize.Large:  Result := 'Large';
-  else
-    Result := '';
-  end;
-end;   {$LINE 20}
-
-function TSuitHelper.ToString: string;
-begin
-  case Self of
-    TSuit.Hearts: Result := 'Hearts';
-    TSuit.Spades: Result := 'Spades';
-  else
-    Result := '';
-  end;
+  System.SysUtils;   {$LINE 6}
+   {$LINE 6}
+function TSizeHelper.ToString: string;   {$LINE 6}
+begin   {$LINE 6}
+  case Self of   {$LINE 6}
+    TSize.Small:  Result := 'Small';   {$LINE 6}
+    TSize.Medium: Result := 'Medium';   {$LINE 6}
+    TSize.Large:  Result := 'Large';   {$LINE 6}
+  else   {$LINE 6}
+    Result := '';   {$LINE 6}
+  end;   {$LINE 6}
+end;   {$LINE 11}
+   {$LINE 11}
+function TSuitHelper.ToString: string;   {$LINE 11}
+begin   {$LINE 11}
+  case Self of   {$LINE 11}
+    TSuit.Hearts: Result := 'Hearts';   {$LINE 11}
+    TSuit.Spades: Result := 'Spades';   {$LINE 11}
+  else   {$LINE 11}
+    Result := '';   {$LINE 11}
+  end;   {$LINE 11}
 end;   {$LINE 20}
 
 type
-  TLocal   {$LINE 24} = (Near, Far);
-  TLocalHelper = record helper for TLocal
-    function ToString: string;
-  end;   {$LINE 24}
-
-function TLocalHelper.ToString: string;
-begin
-  case Self of
-    TLocal.Near: Result := 'Near';
-    TLocal.Far:  Result := 'Far';
-  else
-    Result := '';
-  end;
+  TLocal   {$LINE 24} = (Near, Far);   {$LINE 22}
+  TLocalHelper = record helper for TLocal   {$LINE 22}
+    function ToString: string;   {$LINE 22}
+  end;   {$LINE 22}
+   {$LINE 22}
+function TLocalHelper.ToString: string;   {$LINE 22}
+begin   {$LINE 22}
+  case Self of   {$LINE 22}
+    TLocal.Near: Result := 'Near';   {$LINE 22}
+    TLocal.Far:  Result := 'Far';   {$LINE 22}
+  else   {$LINE 22}
+    Result := '';   {$LINE 22}
+  end;   {$LINE 22}
 end;   {$LINE 24}
 
 function Describe(S: TSize): string;

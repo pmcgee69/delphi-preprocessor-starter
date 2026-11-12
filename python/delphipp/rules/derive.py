@@ -116,9 +116,10 @@ class Derive:
         kids = decl_type.children
         after = kids[[k.start_byte for k in kids].index(attrs.start_byte) + 1]
         ctx.replace_span(attrs, after, ctx.text(after))
+        # both insertions come from the attribute: in the {$LINE} output their lines name its
         ctx.insert_after(decl_type, nl + indent + f'{helper} = record helper for {name}' +
                          nl + indent + '  function ToString: string;' +
-                         nl + indent + 'end;')
+                         nl + indent + 'end;', origin=attrs)
         width = max(len(v) for v in values)
         arms = ''.join(f"    {name}.{v}:{' ' * (width - len(v))} Result := '{v}';" + nl
                        for v in values)
@@ -130,4 +131,4 @@ class Derive:
                          '  else' + nl +
                          "    Result := '';" + nl +
                          '  end;' + nl +
-                         'end;')
+                         'end;', origin=attrs)

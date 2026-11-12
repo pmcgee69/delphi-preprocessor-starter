@@ -5,20 +5,20 @@ program Derived;
 {$SCOPEDENUMS ON}
 
 type
-  TLight   {$LINE 9} = (Red, Amber, Green);
-  TLightHelper = record helper for TLight
-    function ToString: string;
-  end;   {$LINE 9}
-
-function TLightHelper.ToString: string;
-begin
-  case Self of
-    TLight.Red:   Result := 'Red';
-    TLight.Amber: Result := 'Amber';
-    TLight.Green: Result := 'Green';
-  else
-    Result := '';
-  end;
+  TLight   {$LINE 9} = (Red, Amber, Green);   {$LINE 7}
+  TLightHelper = record helper for TLight   {$LINE 7}
+    function ToString: string;   {$LINE 7}
+  end;   {$LINE 7}
+   {$LINE 7}
+function TLightHelper.ToString: string;   {$LINE 7}
+begin   {$LINE 7}
+  case Self of   {$LINE 7}
+    TLight.Red:   Result := 'Red';   {$LINE 7}
+    TLight.Amber: Result := 'Amber';   {$LINE 7}
+    TLight.Green: Result := 'Green';   {$LINE 7}
+  else   {$LINE 7}
+    Result := '';   {$LINE 7}
+  end;   {$LINE 7}
 end;   {$LINE 9}
 
 begin

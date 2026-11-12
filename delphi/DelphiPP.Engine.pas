@@ -50,6 +50,7 @@ type
     EndByte   : Integer;
     Bytes     : TBytes;
     Rule      : string;
+    Origin    : Integer;      // where the lines it adds come from (a byte offset; -1: the edit's own)
   end;
 
   // what a rule sees while it runs on one file
@@ -60,7 +61,7 @@ type
     FEncoding : TEncoding;    // the file's own: for text read, and text a rule inserts
     FMessages : TList<TMessage>;
     FEdits    : TList<TEdit>;
-    procedure AddEdit(StartByte, EndByte: Integer; const Text: string);
+    procedure AddEdit(StartByte, EndByte: Integer; const Text: string; Origin: Integer = -1);
   public
     Rule: string;             // the rule now running, for its messages and edits
     constructor Create(const Source: TBytes; const FileName: string; Encoding: TEncoding);
@@ -70,11 +71,18 @@ type
     // at a line and column (from 1) inside a node's text, where no node of its own is:
     // a line of the footnotes after `end.`
     procedure ReportAt(Line, Col: Integer; const Text: string; const Level: string = 'warning');
-    procedure Replace(const Node: TNode; const Text: string);
+    procedure Replace(const Node: TNode; const Text: string); overload;
     // from the start of one node to the end of a later one, with what lies between
-    procedure ReplaceSpan(const First, Last: TNode; const Text: string);
-    procedure InsertBefore(const Node: TNode; const Text: string);
-    procedure InsertAfter(const Node: TNode; const Text: string);
+    procedure ReplaceSpan(const First, Last: TNode; const Text: string); overload;
+    procedure InsertBefore(const Node: TNode; const Text: string); overload;
+    procedure InsertAfter(const Node: TNode; const Text: string); overload;
+    // with Origin: the node the text comes from, when it isn't where the text goes. The lines
+    // an edit adds are numbered with its line in the {$LINE} output (WithLines): a derived
+    // ToString, written after the implementation's uses, names its [Derive(ToString)] line
+    procedure Replace(const Node: TNode; const Text: string; const Origin: TNode); overload;
+    procedure ReplaceSpan(const First, Last: TNode; const Text: string; const Origin: TNode); overload;
+    procedure InsertBefore(const Node: TNode; const Text: string; const Origin: TNode); overload;
+    procedure InsertAfter(const Node: TNode; const Text: string; const Origin: TNode); overload;
     property FileName: string read FFileName;
   end;
 
@@ -220,7 +228,7 @@ begin
   FMessages.Add(M);
 end;
 
-procedure TContext.AddEdit(StartByte, EndByte: Integer; const Text: string);
+procedure TContext.AddEdit(StartByte, EndByte: Integer; const Text: string; Origin: Integer);
 var
   E: TEdit;
 begin
@@ -228,7 +236,28 @@ begin
   E.EndByte   := EndByte;
   E.Bytes     := FEncoding.GetBytes(Text);
   E.Rule      := Rule;
+  E.Origin    := Origin;
   FEdits.Add(E);
+end;
+
+procedure TContext.Replace(const Node: TNode; const Text: string; const Origin: TNode);
+begin
+  AddEdit(Node.StartByte, Node.EndByte, Text, Origin.StartByte);
+end;
+
+procedure TContext.ReplaceSpan(const First, Last: TNode; const Text: string; const Origin: TNode);
+begin
+  AddEdit(First.StartByte, Last.EndByte, Text, Origin.StartByte);
+end;
+
+procedure TContext.InsertBefore(const Node: TNode; const Text: string; const Origin: TNode);
+begin
+  AddEdit(Node.StartByte, Node.StartByte, Text, Origin.StartByte);
+end;
+
+procedure TContext.InsertAfter(const Node: TNode; const Text: string; const Origin: TNode);
+begin
+  AddEdit(Node.EndByte, Node.EndByte, Text, Origin.StartByte);
 end;
 
 procedure TContext.Replace(const Node: TNode; const Text: string);
@@ -484,6 +513,72 @@ begin
       Inc(Result);
 end;
 
+// each line an edit's text adds, ended by `   {$LINE Origin}`: numbered with the line it comes
+// from (not on a line holding a // comment, where the directive would be comment)
+function MarkAdded(const Text: TBytes; Origin: Integer; Encoding: TEncoding): TBytes;
+begin
+  const Mark = Encoding.GetBytes(Format('   {$LINE %d}', [Origin]));
+  Result := nil;
+  var PieceStart := 0;
+  for var K := 0 to High(Text) do
+    if Text[K] = 10 then
+    begin
+      var Comment := False;
+      for var J := PieceStart to K - 2 do
+        if (Text[J] = Ord('/')) and (Text[J + 1] = Ord('/')) then
+          Comment := True;
+      var PieceEnd := K;                              // before a CR, if the break is CR LF
+      if (K > PieceStart) and (Text[K - 1] = 13) then
+        PieceEnd := K - 1;
+      Result := Result + Copy(Text, PieceStart, PieceEnd - PieceStart);
+      if not Comment then
+        Result := Result + Mark;
+      Result := Result + Copy(Text, PieceEnd, K + 1 - PieceEnd);
+      PieceStart := K + 1;
+    end;
+  Result := Result + Copy(Text, PieceStart, Length(Text) - PieceStart);
+end;
+
+// two edits at one place (two derived methods after one uses clause) leave two directives
+// side by side: only the last counts, so it alone is kept
+function DropShadowed(const Bytes: TBytes): TBytes;
+const
+  Lead: array[0..9] of Byte = (32, 32, 32, Ord('{'), Ord('$'), Ord('L'), Ord('I'), Ord('N'), Ord('E'), 32);
+
+  function LeadAt(At: Integer): Boolean;
+  begin
+    if At + Length(Lead) > Length(Bytes) then
+      Exit( False );
+    for var I := 0 to High(Lead) do
+      if Bytes[At + I] <> Lead[I] then
+        Exit( False );
+    Exit( True );
+  end;
+
+begin
+  SetLength(Result, Length(Bytes));
+  var N := 0;
+  var I := 0;
+  while I < Length(Bytes) do
+  begin
+    if LeadAt(I) then
+    begin
+      var J := I + Length(Lead);
+      while (J < Length(Bytes)) and (Bytes[J] in [Ord('0')..Ord('9')]) do
+        Inc(J);
+      if (J > I + Length(Lead)) and (J < Length(Bytes)) and (Bytes[J] = Ord('}')) and LeadAt(J + 1) then
+      begin
+        I := J + 1;                                   // this one is shadowed by the next
+        Continue;
+      end;
+    end;
+    Result[N] := Bytes[I];
+    Inc(N);
+    Inc(I);
+  end;
+  SetLength(Result, N);
+end;
+
 function WithLines(const Source: TBytes; const Edits: TArray<TEdit>; const FileName: string): TBytes;
 begin
   var Encoding := SourceEncoding(Source);
@@ -514,6 +609,14 @@ begin
       if (Newlines(Text, 0, Length(Text)) <> Newlines(Source, E.StartByte, E.EndByte)) and
          not Blank then
       begin
+        // each line the edit adds: numbered with its origin's line
+        if Newlines(Text, 0, Length(Text)) > Newlines(Source, E.StartByte, E.EndByte) then
+        begin
+          var From := E.StartByte;
+          if E.Origin >= 0 then
+            From := E.Origin;
+          Text := MarkAdded(Text, Newlines(Source, 0, From) + 1, Encoding);
+        end;
         // the text after the edit's last line break: blanks only, its indent, when it ends
         // where a line starts
         var LastBreak := -1;
@@ -536,6 +639,7 @@ begin
       Result := Copy(Result, 0, E.StartByte) + Text +
                 Copy(Result, E.EndByte, Length(Result) - E.EndByte);
     end;
+    Result := DropShadowed(Result);
     if Name <> '' then
     begin
       // a line of its own before everything but a UTF-8 BOM: line 1 is then 1, of the file named

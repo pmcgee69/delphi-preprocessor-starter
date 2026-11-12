@@ -8,6 +8,7 @@ from the end of the file back, so one rule's edit can't shift another's.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from .grammar import parser
@@ -31,6 +32,7 @@ class Edit:
     end: int
     text: bytes
     rule: str
+    origin: int | None = None   # where the lines it adds come from (a byte offset), for {$LINE}
 
 
 class Context:
@@ -63,21 +65,25 @@ class Context:
         self.messages.append(Message(level, line, col, text, self.rule))
 
     # --- proposing edits -------------------------------------------------
-    def replace(self, node, text: str):
-        self._edit(node.start_byte, node.end_byte, text)
+    # origin: the node the text comes from, when it isn't where the text goes. The lines an edit
+    # adds are numbered with its line in the {$LINE} output (with_lines): a derived ToString,
+    # written after the implementation's uses, names its [Derive(ToString)] line
+    def replace(self, node, text: str, origin=None):
+        self._edit(node.start_byte, node.end_byte, text, origin)
 
-    def replace_span(self, first, last, text: str):
+    def replace_span(self, first, last, text: str, origin=None):
         """From the start of one node to the end of a later one, with what lies between."""
-        self._edit(first.start_byte, last.end_byte, text)
+        self._edit(first.start_byte, last.end_byte, text, origin)
 
-    def insert_before(self, node, text: str):
-        self._edit(node.start_byte, node.start_byte, text)
+    def insert_before(self, node, text: str, origin=None):
+        self._edit(node.start_byte, node.start_byte, text, origin)
 
-    def insert_after(self, node, text: str):
-        self._edit(node.end_byte, node.end_byte, text)
+    def insert_after(self, node, text: str, origin=None):
+        self._edit(node.end_byte, node.end_byte, text, origin)
 
-    def _edit(self, start, end, text):
-        self.edits.append(Edit(start, end, text.encode(self.encoding), self.rule))
+    def _edit(self, start, end, text, origin=None):
+        self.edits.append(Edit(start, end, text.encode(self.encoding), self.rule,
+                               origin.start_byte if origin is not None else None))
 
 
 def decode(raw: bytes) -> tuple[str, str]:
@@ -154,6 +160,11 @@ def with_lines(raw: bytes, edits, filename: str) -> bytes:
     dcc's messages, Assert's text and the debugger name filename and its lines, not the output's:
     one at the top, naming it, and one after each edit that changes the number of lines.
     {$LINE N} makes the next line N and the rest of its own line N - 1, so none adds a line.
+    The lines an edit adds are each numbered with the line they come from: the edit's origin
+    if the rule named one (derive: the type's [Derive] line), else the line where it was made
+    (user, 12 Nov: before, they ran on from the line before, n, n + 1 …, and a derived method
+    after the uses clause was numbered as the declarations that follow it). Not on a line holding
+    a // comment, where the directive would be comment.
     filename is left out ('' or a name the directive can't hold): the lines are still right."""
     encoding, _ = decode(raw)
     # a name in quotes, which ends at the first quote ('' isn't one), in the file's encoding
@@ -171,6 +182,16 @@ def with_lines(raw: bytes, edits, filename: str) -> bytes:
         # (none when nothing but blanks follows: after end., where the footnotes went, dcc
         # would warn of text after it, W1011)
         if text.count(b'\n') != raw.count(b'\n', e.start, e.end) and raw[e.end:].strip():
+            if text.count(b'\n') > raw.count(b'\n', e.start, e.end):
+                # each line the edit adds: numbered with its origin's line
+                origin = raw.count(b'\n', 0, e.start if e.origin is None else e.origin) + 1
+                mark = f'   {{$LINE {origin}}}'.encode(encoding)
+                pieces = text.split(b'\n')
+                for i in range(len(pieces) - 1):
+                    if b'//' not in pieces[i]:
+                        cr = b'\r' if pieces[i].endswith(b'\r') else b''
+                        pieces[i] = pieces[i][:len(pieces[i]) - len(cr)] + mark + cr
+                text = b'\n'.join(pieces)
             tail = text[text.rfind(b'\n') + 1:]
             if b'\n' in text and not tail.strip():
                 # the edit ends where a line starts (its indent after it): a line of its own,
@@ -182,6 +203,9 @@ def with_lines(raw: bytes, edits, filename: str) -> bytes:
                 line = raw.count(b'\n', 0, e.end) + 2
                 text += f'   {{$LINE {line}}}'.encode(encoding)
         out = out[:e.start] + text + out[e.end:]
+    # two edits at one place (two derived methods after one uses clause) leave two directives
+    # side by side: only the last counts, so it alone is kept
+    out = re.sub(rb'   \{\$LINE \d+\}(?=   \{\$LINE \d+\})', b'', out)
     if name:
         # a line of its own before everything but a UTF-8 BOM: line 1 is then 1, of the file named
         at = 3 if raw.startswith(b'\xef\xbb\xbf') else 0

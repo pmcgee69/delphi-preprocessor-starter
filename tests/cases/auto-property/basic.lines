@@ -8,9 +8,9 @@ uses
 
 type
   TPerson = class
-  private
-    FName: string;
-    FAge: Integer;
+  private   {$LINE 10}
+    FName: string;   {$LINE 10}
+    FAge: Integer;   {$LINE 10}
   {$LINE 10}
   public
     property Name: string read FName write FName;
