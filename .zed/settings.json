@@ -1,6 +1,6 @@
-// This project's .pas and .dpr files are Delphi, ahead of any other extension claiming them.
+// This project's .pas, .dpr and .dpps files are Delphi, ahead of any other extension claiming them.
 {
   "file_types": {
-    "Delphi": ["pas", "dpr", "dpk", "inc"]
+    "Delphi": ["pas", "dpr", "dpk", "inc", "dpps"]
   }
 }

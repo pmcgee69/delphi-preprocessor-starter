@@ -1,6 +1,6 @@
 name = "Delphi"
 grammar = "delphi13"
-path_suffixes = ["pas", "dpr", "dpk", "inc"]
+path_suffixes = ["pas", "dpr", "dpk", "inc", "dpps"]
 line_comments = ["// "]
 block_comment = ["{ ", " }"]
 tab_size = 2

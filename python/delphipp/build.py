@@ -20,6 +20,8 @@ import tempfile
 from . import engine, rules
 
 DCC_LOCATED = re.compile(r'^(.+?)\((\d+)\) (Hint|Warning|Error|Fatal): (.*)$')
+# `unit X.dpps;` (or program, library) as `unit X;`: as __main__'s HEADER, less its {$LINE}
+DPPS_HEADER = re.compile(rb'(?im)^((?:\xef\xbb\xbf)?\s*(?:unit|program|library)\s+)([\w.]+?)\.dpps(\s*;)')
 
 
 def source_line(raw: bytes, edits, out_line: int) -> int:
@@ -74,6 +76,16 @@ def main(argv=None) -> int:
         folder = folder / 'win32'       # its compiled units are its own
     folder.mkdir(parents=True, exist_ok=True)
     target = folder / a.file.name
+    program = a.file.suffix.lower() == '.dpr'
+    low = a.file.name.lower()
+    if low.endswith(('.dpps', '.dpps.pas')):
+        # a .dpps source: dcc is given it under a name it compiles, X.dpr for a program, X.pas
+        # for a unit, and `unit X.dpps;` as `unit X;`, as the IDE's pre-build event writes it
+        # (user, 12 Nov: Hello.dpr copied to Hello.dpps, "not seeing the same in task:spawn")
+        stem = a.file.name[:-len('.dpps.pas' if low.endswith('.dpps.pas') else '.dpps')]
+        program = re.search(rb'(?im)^\s*(program|library)\b', out) is not None
+        target = folder / (stem + ('.dpr' if program else '.pas'))
+        out = DPPS_HEADER.sub(rb'\1\2\3', out, count=1)
     target.write_bytes(out)
     compiler = 'dcc32' if a.win32 else 'dcc64'
     run = subprocess.run([compiler, '-Q', f'-E{folder}', f'-NU{folder}', '-NSSystem;Winapi',
@@ -94,9 +106,9 @@ def main(argv=None) -> int:
         print(f'{compiler} refused it', file=sys.stderr)
         return 1
     print(f'compiled: {target}')
-    if a.run and a.file.suffix.lower() == '.dpr':
+    if a.run and program:
         sys.stdout.flush()      # ours first, then the program's
-        return subprocess.run([str(folder / (a.file.stem + '.exe'))], stdin=subprocess.DEVNULL).returncode
+        return subprocess.run([str(folder / (target.stem + '.exe'))], stdin=subprocess.DEVNULL).returncode
     return 0
 
 
