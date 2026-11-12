@@ -170,8 +170,9 @@ The two checks, `with` and `with-try`, are written but switched off: they are le
     Name: who to greet.
   ```
 
-  A name declared nowhere or overloaded, a parameter the routine doesn't have, or XMLDoc
-  already there is an error. Text after `end.` that doesn't start with a footnote is left alone.
+  A description can run over several lines; a line indented deeper than its `Name:` line
+  always goes on with it, a colon in it or not. A name declared nowhere or overloaded, a
+  parameter the routine doesn't have, or XMLDoc already there is an error. Text after `end.` that doesn't start with a footnote is left alone.
   The Delphi editor highlights that text as code, so a lone `'` starts a string to the end of
   the line: write `''`, as in a string (`G''day`), and the XMLDoc has `'`.
 - **`derive`** (`python\delphipp\rules\derive.py`), a rewrite: `[Derive(ToString)]` on an

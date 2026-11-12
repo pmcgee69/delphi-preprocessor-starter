@@ -138,12 +138,17 @@ begin
       Continue;
     var Last := High(Notes);
     M := TRegEx.Match(Line, Item);
-    if M.Success then
+    const Col = Length(Line) - Length(Line.TrimLeft) + 1;
+    // a line indented deeper than the item before it goes on with it, a colon in it or not
+    // (user, 12 Nov: `G: the name,` with its next lines under it)
+    const Hangs = (Length(Notes[Last].Items) > 0) and
+                  (Col > Notes[Last].Items[High(Notes[Last].Items)].Col);
+    if M.Success and not Hangs then
     begin
       var It: TItem;
       It.Name := M.Groups[1].Value;
       It.Line := FirstLine + I;
-      It.Col  := Length(Line) - Length(Line.TrimLeft) + 1;
+      It.Col  := Col;
       It.Text := [M.Groups[2].Value.Trim];
       Notes[Last].Items := Notes[Last].Items + [It];
     end

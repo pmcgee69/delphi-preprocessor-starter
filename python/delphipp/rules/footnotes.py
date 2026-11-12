@@ -11,7 +11,13 @@ dcc reads nothing after `end.`, and the grammar keeps it as one node, trailingTe
 footnotes need no new grammar: the rule reads that node's lines itself. A footnote starts at
 the line's first column with `[Name]`, `[Type.Member]` or `[Type]`, and the summary after it;
 an indented line `Param: text` describes a parameter, `Result: text` a function's result; any
-other line goes on with the line before it.
+other line goes on with the line before it, and so does a line indented deeper than the
+`Param:` line before it, even with a colon in it:
+
+    [Greeting] A greeting.
+      G: the name,
+         the mood: Calm or Excited,         (G's, not a parameter `the`)
+         and the count.
 
 The XMLDoc goes above the declaration Help Insight reads: a unit's interface first, else its
 implementation (a routine or type of its own); in a program, its own declarations. Then the
@@ -60,8 +66,11 @@ def parse(text, first_line):
         if not line.strip():
             continue
         m = ITEM.match(line)
-        if m:
-            col = len(line) - len(line.lstrip()) + 1
+        col = len(line) - len(line.lstrip()) + 1
+        # a line indented deeper than the item before it goes on with it, a colon in it or not
+        # (user, 12 Nov: `G: the name,` with its next lines under it)
+        hangs = bool(notes[-1].items) and col > notes[-1].items[-1][2]
+        if m and not hangs:
             notes[-1].items.append([m.group(1), first_line + i, col, [m.group(2).strip()]])
         elif notes[-1].items:
             notes[-1].items[-1][3].append(line.strip())
