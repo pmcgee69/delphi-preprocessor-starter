@@ -5,7 +5,11 @@ becomes
     Assert(Count > 0, 'Orders.pas:41: Count > 0');
 
 Delphi's own message for a failed Assert names the unit and line too, but only
-with assertions on and debug information, and never the condition. An Assert
+with assertions on and debug information, and never the condition. In a .dpps
+source the message is the condition alone: its .pas carries {$LINE}, so Delphi's
+own text names the .dpps and its line already,
+
+    Assert(Count > 0, 'Count > 0');   ->   Count > 0 (...Orders.dpps, line 41) An Assert
 that already has a message is left alone, and so is anything not Delphi's
 Assert: a call written `System.Assert(…)` is taken too, a method named Assert
 on some object is not.
@@ -29,9 +33,15 @@ class AssertMessage:
         if len(parts) != 1:
             return                              # already has a message
         cond = parts[0]
-        where = f"{pathlib.Path(ctx.filename).name}:{ctx.line(node)}"
         text = ' '.join(ctx.text(cond).split())  # one line, however it was written
-        message = f"{where}: {text}".replace("'", "''")
+        name = pathlib.Path(ctx.filename).name
+        if name.lower().endswith(('.dpps', '.dpps.pas')):
+            # its .pas carries {$LINE}, so dcc's own text already names the source and its
+            # line: the condition is all it lacks (user, 12 Nov: "yes to the assert change")
+            message = text
+        else:
+            message = f"{name}:{ctx.line(node)}: {text}"
+        message = message.replace("'", "''")
         ctx.insert_after(cond, f", '{message}'")
 
     @staticmethod

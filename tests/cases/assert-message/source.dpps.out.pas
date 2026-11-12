@@ -1,0 +1,19 @@
+unit Source.dpps;
+
+// A .dpps source (named .dpps.pas, as the tests read .pas): the message is the condition
+// alone, since the .pas written from it carries $LINE directives and dcc names the source
+// and the line itself.
+
+interface
+
+procedure Check(Count: Integer; const Name: string);
+
+implementation
+
+procedure Check(Count: Integer; const Name: string);
+begin
+  Assert(Count > 0, 'Count > 0');
+  Assert(Name <> 'it''s', 'Name <> ''it''''s''');
+end;
+
+end.

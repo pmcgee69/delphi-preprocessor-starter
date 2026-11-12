@@ -12,7 +12,7 @@ Here the rules make a unit dcc would refuse into one it compiles:
 | two `uses` clauses, each with its comment | one clause (`uses-merge`) |
 | `[Derive(ToString)]` on `TMood = (Calm, Excited)` | `TMoodHelper`, a record helper whose `ToString` gives `'Calm'` or `'Excited'`, so `G.Mood.ToString` compiles (`derive`) |
 | `case G.Lang of 'en': … 'fr': …` (a `case` on strings) | an `if` chain, each arm on its own line (`case-of`) |
-| `Assert(G.Times > 0)` | `Assert(G.Times > 0, 'Greet.dpps:30: G.Times > 0')` (`assert-message`) |
+| `Assert(G.Times > 0)` | `Assert(G.Times > 0, 'G.Times > 0')`, failing as `G.Times > 0 (…\Greet.dpps, line 30)` (`assert-message`; the file and line are dcc's, from `{$LINE}`) |
 | footnotes after `end.`: `[Greeting] A greeting for G, …`, with `G:` and `Result:` lines | XMLDoc above `TGreeting` and `Greeting`, for Help Insight, and nothing after `end.` (`footnotes`) |
 
 The footnotes at the foot of `Greet.dpps` (below), and Help Insight on `Greeting` in

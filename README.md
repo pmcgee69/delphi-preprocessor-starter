@@ -103,8 +103,10 @@ The two checks, `with` and `with-try`, are written but switched off: they are le
   reported with its objects, since each name inside it could belong to any of them.
 - **`assert-message`** (`python\delphipp\rules\assert_message.py`), a rewrite:
   `Assert(Count > 0)` becomes `Assert(Count > 0, 'Orders.pas:41: Count > 0')`, so a failed
-  assertion says where and what. One with a message already, and a method that happens to be
-  called `Assert`, are left alone.
+  assertion says where and what. In a `.dpps` source it gains the condition alone,
+  `Assert(Count > 0, 'Count > 0')`: the `.pas` written from it carries `{$LINE}`, so Delphi's
+  own text already names the `.dpps` and its line. One with a message already, and a method
+  that happens to be called `Assert`, are left alone.
 - **`with-try`** (`python\delphipp\rules\with_and_try.py`), a check of two kinds of nodes:
   how one rule handles more than one. `Visit` asks the node's kind and hands it on to a
   procedure for each: `with`, as above, and `try`, where an empty `except` (which swallows

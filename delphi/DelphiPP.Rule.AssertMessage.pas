@@ -108,9 +108,15 @@ begin
     Exit;                                   // already has a message
   // the message: file and line, then the condition as written, on one line,
   // with each ' doubled, as a Delphi string needs
+  // In a .dpps source the condition alone: its .pas carries {$LINE}, so dcc's own text
+  // names the source and its line already (user, 12 Nov: "yes to the assert change")
   const Cond    = Parts[0];
-  const Where   = ExtractFileName(Ctx.FileName) + ':' + IntToStr(Node.Line);
-  const Message = (Where + ': ' + OneLine(Ctx.Text(Cond))).Replace('''', '''''');
+  const Name    = ExtractFileName(Ctx.FileName);
+  const Dpps    = Name.ToLower.EndsWith('.dpps') or Name.ToLower.EndsWith('.dpps.pas');
+  var Message   := OneLine(Ctx.Text(Cond));
+  if not Dpps then
+    Message := Name + ':' + IntToStr(Node.Line) + ': ' + Message;
+  Message := Message.Replace('''', '''''');
   // the edit: text inserted after the condition; the engine applies it
   Ctx.InsertAfter(Cond, ', ''' + Message + '''');
 end;
