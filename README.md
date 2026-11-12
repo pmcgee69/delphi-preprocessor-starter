@@ -37,7 +37,8 @@ the rules make into Delphi dcc accepts. dcc's own errors name the `.dpps` and it
 (the generated `.pas` carries dcc's `{$LINE N 'file'}`), so a double-click opens the source
 and the debugger steps through it: [the video](https://youtu.be/LJM2JrihDWU). Its footnotes
 after `end.` become XMLDoc, so Help Insight on `Greeting` shows the summary, the parameter and
-the result written there ([the screenshot](examples/ide/footnotes-help-insight.png)).
+the result written there ([the screenshot](examples/ide/footnotes-help-insight.png)). And an
+enum marked `[Derive(ToString)]` gets a `ToString`, whose lines name the attribute's.
 
 ## New to it? 
 Start with the hand-held walkthrough:

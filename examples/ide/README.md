@@ -10,8 +10,9 @@ Here the rules make a unit dcc would refuse into one it compiles:
 |---|---|
 | `unit Greet.dpps;`, so the IDE's tabs and lists tell the two apart | `unit Greet;` |
 | two `uses` clauses, each with its comment | one clause (`uses-merge`) |
-| `case G.Lang of 'en': … 'fr': …` (a `case` on strings) | an `if` chain (`case-of`) |
-| `Assert(G.Times > 0)` | `Assert(G.Times > 0, 'Greet.dpps:26: G.Times > 0')` (`assert-message`) |
+| `[Derive(ToString)]` on `TMood = (Calm, Excited)` | `TMoodHelper`, a record helper whose `ToString` gives `'Calm'` or `'Excited'`, so `G.Mood.ToString` compiles (`derive`) |
+| `case G.Lang of 'en': … 'fr': …` (a `case` on strings) | an `if` chain, each arm on its own line (`case-of`) |
+| `Assert(G.Times > 0)` | `Assert(G.Times > 0, 'Greet.dpps:30: G.Times > 0')` (`assert-message`) |
 | footnotes after `end.`: `[Greeting] A greeting for G, …`, with `G:` and `Result:` lines | XMLDoc above `TGreeting` and `Greeting`, for Help Insight, and nothing after `end.` (`footnotes`) |
 
 The footnotes at the foot of `Greet.dpps` (below), and Help Insight on `Greeting` in
@@ -123,13 +124,26 @@ starts (the XMLDoc from the footnotes), else after the code on the edit's last l
 unit Greet;
 …
 type
-  /// <summary>Who to greet, in which language, and how many times.</summary>
+  /// <summary>How the greeting sounds.</summary>
   {$LINE 14}
-  TGreeting = record
+  // derive: TMood.ToString, written as a record helper
+  TMood = (Calm, Excited);   {$LINE 14}
+  TMoodHelper = record helper for TMood   {$LINE 14}
+    function ToString: string;   {$LINE 14}
+  end;   {$LINE 16}
 …
+  begin                  // case-of: a case on strings, which dcc refuses, as an if chain
+    if G.Lang = 'en' then Hello := 'Hello'
+    else if G.Lang = 'fr' then Hello := 'Bonjour'
+    else if G.Lang = 'de' then Hello := 'Hallo'
   else
-    Hello := 'G''day';   {$LINE 36}
+    Hello := 'G''day';
+  end;
 ```
+
+The helper `derive` adds, and its `ToString` further down, name line 14, the
+`[Derive(ToString)]` line, so a message or a step in them lands there (12 Nov). The `if` chain
+keeps the `case`'s lines, so it needs no directive.
 
 So, with nothing to set up, dcc's errors, warnings and hints name `Greet.dpps` and its line, in
 the IDE's Messages pane and in msbuild's output; an `Assert` without a message names the
@@ -146,10 +160,10 @@ in the Messages pane as `[dcc64 Error] Greet.dpps(26): E2008 Incompatible types`
 double-clicking it opens `Greet.dpps` at that line, and stepping into the unit in the debugger
 shows `Greet.dpps`. The [video](https://youtu.be/LJM2JrihDWU) shows it.
 
-- **Inside a rewritten statement the lines are near, not exact**: the `if` chain `case-of`
-  writes, with the comment it moves, has nine lines for the `case`'s seven, numbered on from
-  the `case`'s, so an error in
-  the `'fr'` arm (line 29) is given as line 31. After the statement they are exact again.
+- **Lines a rule adds name the line they come from**: the rule's own choice (derive: the
+  attribute), else the line where they were added. Until 12 Nov they were numbered on from
+  the line before, and the `if` chain `case-of` wrote had nine lines for the `case`'s seven,
+  so an error in the `'fr'` arm was given two lines down; `case-of` now keeps every line.
 - **The name is the file's full path**, as the directive ends it at the first quote: a path
   with a `'` in it is left out, and the messages name `Greet.pas`, on `Greet.dpps`'s lines.
 - **In code `{$IFDEF}` leaves out**, a directive after an edit there is left out too (checked:

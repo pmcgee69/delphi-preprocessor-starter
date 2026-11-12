@@ -9,10 +9,12 @@ var
 begin
   G.Name  := 'Delphi';
   G.Lang  := 'fr';
+  G.Mood  := TMood.Excited;
   G.Times := 2;
   WriteLn(Greeting(G));
 
   G.Lang  := 'xx';
+  G.Mood  := TMood.Calm;
   G.Times := 1;
   WriteLn(Greeting(G));
 
