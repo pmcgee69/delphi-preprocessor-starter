@@ -52,9 +52,9 @@ end.
 
 [Greeting] A greeting for G, repeated G.Times times on one line, its mood after it.
   G: the name,
-  the language ('en', 'fr' or 'de'; any other is G''day),
-  the mood,
-  and the count, at least 1.
+     the language ('en', 'fr' or 'de'; any other is G''day),
+     the mood,
+     and the count, at least 1.
   Result: the greetings, separated by spaces, then the mood in brackets.
 
 
