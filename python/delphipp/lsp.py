@@ -78,13 +78,29 @@ def analyse(text: str, filename: str) -> tuple[list[dict], dict]:
         found.append({'range': {'start': pos.of_line_col(row, col), 'end': pos.of_byte(word_end(raw, start))},
                       'severity': SEVERITY.get(m.level, 3), 'source': m.rule, 'message': m.text})
     actions: dict[str, list[dict]] = {}
+    groups: dict[tuple[str, tuple[int, int]], list] = {}
     for e in edits:
         new = e.text.decode('utf-8', 'replace')
         actions.setdefault(e.rule, []).append({'range': {'start': pos.of_byte(e.start), 'end': pos.of_byte(e.end)},
                                                'newText': new})
+        if e.group is not None:
+            groups.setdefault((e.rule, e.group), []).append(e)
+            continue
         end = e.end if e.end > e.start else word_end(raw, e.start)
         found.append({'range': {'start': pos.of_byte(e.start), 'end': pos.of_byte(end)}, 'severity': 3,
                       'source': e.rule, 'message': f'{e.rule} would write:\n{new.strip() or "(remove this)"}'})
+    # a rule's edits from one visit (a case-of's, one an arm) as one diagnostic over the node,
+    # whose message is the node as rewritten: the whole if chain, as the IDE's hover shows it
+    for (rule, (start, end)), group in groups.items():
+        whole, at = [], start
+        for e in group:     # in source order, as run_with_edits gives them
+            whole.append(raw[at:e.start])
+            whole.append(e.text)
+            at = e.end
+        whole.append(raw[at:end])
+        new = b''.join(whole).decode('utf-8', 'replace')
+        found.append({'range': {'start': pos.of_byte(start), 'end': pos.of_byte(end)}, 'severity': 3,
+                      'source': rule, 'message': f'{rule} would write:\n{new.strip() or "(remove this)"}'})
     return found, actions
 
 

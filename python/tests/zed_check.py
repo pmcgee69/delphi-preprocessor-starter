@@ -55,8 +55,17 @@ send(method='textDocument/didOpen', params={'textDocument': {'uri': URI, 'langua
 m = got.get(timeout=30)
 d = m['params']['diagnostics']
 print('sources:', sorted({x['source'] for x in d}))
-assert {r.name for r in rules.ALL} <= {x['source'] for x in d}, d     # every rule switched on
 assert not [x for x in d if x['severity'] == 1], 'the tour parses'
+# a case-of's edits, one an arm, are one diagnostic over the case: its whole if chain
+co = [x for x in d if x['source'] == 'case-of']
+assert len(co) == 2 and all(x['message'].count('else if') == 1 for x in co), co
+# the IDE example has what the tour lacks (footnotes, derive): every rule switched on, between them
+GREET = PY.parent / 'examples' / 'ide' / 'Greet.dpps'
+send(method='textDocument/didOpen', params={'textDocument': {'uri': GREET.as_uri(), 'languageId': 'delphi', 'version': 1,
+                                                             'text': GREET.read_text(encoding='utf-8')}})
+g = got.get(timeout=30)['params']['diagnostics']
+print('sources in Greet.dpps:', sorted({x['source'] for x in g}))
+assert {r.name for r in rules.ALL} <= {x['source'] for x in d + g}, d + g     # every rule switched on
 w = next((x for x in d if x['source'] == 'with'), None)
 assert w is None or TOUR.split('\n')[w['range']['start']['line']].strip().startswith('with P do'), w
 send(id=2, method='textDocument/codeAction', params={'textDocument': {'uri': URI},

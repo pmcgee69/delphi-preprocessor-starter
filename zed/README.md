@@ -86,7 +86,8 @@ In the list of files on the left, open `tests`, then `tour`, then **Tour.dpr**. 
 something for every example rule. You should see it in colour, with some code underlined.
 
 **See what the rules say.** Hover the mouse over underlined code. Each rule says what it would write
-instead. To see them all in one list, open the command palette and run **diagnostics: deploy**.
+instead. A `case` that case-of rewrites is underlined as a whole, and its hover is the whole `if`
+chain, though the rewrite is an edit an arm (so each line keeps its number). To see them all in one list, open the command palette and run **diagnostics: deploy**.
 
 (The checks, `with` and `with-try`, which report a problem rather than rewrite, are switched
 off: add them back to `ALL` in `python\delphipp\rules\__init__.py` to see their warnings.) 

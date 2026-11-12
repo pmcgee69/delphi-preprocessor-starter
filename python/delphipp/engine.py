@@ -33,6 +33,9 @@ class Edit:
     text: bytes
     rule: str
     origin: int | None = None   # where the lines it adds come from (a byte offset), for {$LINE}
+    # the node the rule was visiting, when the rule groups its edits (groups_edits): an editor
+    # shows the edits of one visit as one rewrite, a case-of's whole if chain, not arm by arm
+    group: tuple[int, int] | None = None
 
 
 class Context:
@@ -45,6 +48,7 @@ class Context:
         self.messages: list[Message] = []
         self.edits: list[Edit] = []
         self.rule = ''                  # the rule now running, for its messages and edits
+        self.group = None               # the visited node's (start, end), if the rule groups
 
     # --- reading ---------------------------------------------------------
     def text(self, node) -> str:
@@ -83,7 +87,7 @@ class Context:
 
     def _edit(self, start, end, text, origin=None):
         self.edits.append(Edit(start, end, text.encode(self.encoding), self.rule,
-                               origin.start_byte if origin is not None else None))
+                               origin.start_byte if origin is not None else None, self.group))
 
 
 def decode(raw: bytes) -> tuple[str, str]:
@@ -147,6 +151,7 @@ def run_with_edits(raw: bytes, rules, filename: str = '<input>') -> tuple[bytes,
         node = stack.pop()
         for rule in wanted.get(node.type, ()):
             ctx.rule = rule.name
+            ctx.group = (node.start_byte, node.end_byte) if getattr(rule, 'groups_edits', False) else None
             rule.visit(node, ctx)
         stack.extend(reversed(node.children))
     out = _apply(raw, ctx)

@@ -98,6 +98,7 @@ def dangles(node):
 class CaseOf:
     name = 'case-of'
     kinds = ('case',)
+    groups_edits = True     # one edit an arm, shown in an editor as the whole if chain
 
     def visit(self, node, ctx):
         kids = node.children
