@@ -122,21 +122,24 @@ The two checks, `with` and `with-try`, are written but switched off: they are le
   alternatives (one per platform), as in Delphi's own RTL.
 - **`case-of`** (`python\delphipp\rules\case_of.py`), a rewrite: `case` on strings, and on
   class types, written as the `if` chain Delphi compiles. A case on a `Char`, or any other
-  ordinal, is left alone:
+  ordinal, is left alone. Every line stays where it was, so dcc's messages and the debugger
+  name each arm's own line:
 
   ```pascal
-  case s of                              if (s = 'hello') or (s = 'hi') then
-    'hello', 'hi' : x := 1;                x := 1
-    sWorld        : x := 3;      ->      else if s = sWorld then
-  else                                     x := 3
-    x := 0;                              else
-  end;                                     x := 0;
+  case s of                      begin
+    'hello', 'hi' : x := 1;        if (s = 'hello') or (s = 'hi') then x := 1
+    sWorld        : x := 3;  ->    else if s = sWorld then x := 3
+  else                           else
+    x := 0;                        x := 0;
+  end;                           end;
 
-  case x.ClassType of                    if x.ClassType = TStringList then
-    TStringList : k := 1;        ->        k := 1
-    TList       : k := 2;                else if x.ClassType = TList then
-  end;                                     k := 2;
+  case x.ClassType of            begin
+    TStringList : k := 1;    ->    if x.ClassType = TStringList then k := 1
+    TList       : k := 2;          else if x.ClassType = TList then k := 2
+  end;                           end;
   ```
+  An arm whose statement is an `if` with no `else` is put in `begin … end`, so the next arm's
+  `else` isn't taken by it.
 
 - **`auto-property`** (`python\delphipp\rules\auto_property.py`), a rewrite: a property with
   no field and no `read` or `write` gains all three:
