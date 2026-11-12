@@ -79,6 +79,7 @@ type
     function Kinds: TArray<string>; override;
     function Description: string; override;
     procedure Visit(const Node: TNode; Ctx: TContext); override;
+    function GroupsEdits: Boolean; override;
   end;
 
 implementation
@@ -90,6 +91,13 @@ uses
 function TCaseOf.Name: string;
 begin
   Exit( 'case-of' );
+end;
+
+// its edits, one per arm since they keep the lines, are one rewrite: an editor's hover
+// shows the whole if chain (user, 12 Nov)
+function TCaseOf.GroupsEdits: Boolean;
+begin
+  Exit( True );
 end;
 
 // the Kind of node the engine calls Visit for: as --tree prints it

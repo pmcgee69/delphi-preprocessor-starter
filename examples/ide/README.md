@@ -158,7 +158,8 @@ Greet.dpps(35): error E2003: Undeclared identifier: 'Undefined1' [...\Hello.dpro
 where it was `Greet.pas(37)`. In the IDE (Delphi 13, 11 Nov 2026), a mistake on line 26 shows
 in the Messages pane as `[dcc64 Error] Greet.dpps(26): E2008 Incompatible types`;
 double-clicking it opens `Greet.dpps` at that line, and stepping into the unit in the debugger
-shows `Greet.dpps`. The [video](https://youtu.be/LJM2JrihDWU) shows it.
+shows `Greet.dpps`. The [video](https://youtu.be/LJM2JrihDWU) shows it; [a second
+video](https://youtu.be/-hhXFSDIgsY) (12 Nov) shows the footnotes and derive.
 
 - **Lines a rule adds name the line they come from**: the rule's own choice (derive: the
   attribute), else the line where they were added. Until 12 Nov they were numbered on from

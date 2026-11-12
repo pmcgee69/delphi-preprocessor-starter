@@ -51,6 +51,10 @@ type
     Bytes     : TBytes;
     Rule      : string;
     Origin    : Integer;      // where the lines it adds come from (a byte offset; -1: the edit's own)
+    // the node the rule was visiting when it made the edit, by byte: a hover can show all of
+    // what one visit changed in it, the whole case-of `if` chain (user, 12 Nov)
+    GroupStart: Integer;
+    GroupEnd  : Integer;
   end;
 
   // what a rule sees while it runs on one file
@@ -64,6 +68,7 @@ type
     procedure AddEdit(StartByte, EndByte: Integer; const Text: string; Origin: Integer = -1);
   public
     Rule: string;             // the rule now running, for its messages and edits
+    VisitStart, VisitEnd: Integer;   // the node it is visiting, for its edits' Group
     constructor Create(const Source: TBytes; const FileName: string; Encoding: TEncoding);
     destructor Destroy; override;
     function Text(const Node: TNode): string;
@@ -92,6 +97,10 @@ type
     function Kinds: TArray<string>; virtual; abstract;
     function Description: string; virtual; abstract;
     procedure Visit(const Node: TNode; Ctx: TContext); virtual; abstract;
+    // True: its edits in one visit are one rewrite of the node, so an editor's hover shows
+    // the node rewritten whole (case-of). False, the default: each edit shows alone, for a
+    // rule that visits a whole unit and makes unrelated edits in it (derive, footnotes)
+    function GroupsEdits: Boolean; virtual;
   end;
 
 // run the rules over one file's bytes: its messages, and the output in Output
@@ -228,6 +237,11 @@ begin
   FMessages.Add(M);
 end;
 
+function TRule.GroupsEdits: Boolean;
+begin
+  Exit( False );
+end;
+
 procedure TContext.AddEdit(StartByte, EndByte: Integer; const Text: string; Origin: Integer);
 var
   E: TEdit;
@@ -237,6 +251,8 @@ begin
   E.Bytes     := FEncoding.GetBytes(Text);
   E.Rule      := Rule;
   E.Origin    := Origin;
+  E.GroupStart := VisitStart;
+  E.GroupEnd   := VisitEnd;
   FEdits.Add(E);
 end;
 
@@ -419,7 +435,9 @@ begin
         if Wanted.TryGetValue(Node.Kind, List) then
           for var R in List do
           begin
-            Ctx.Rule := R.Name;
+            Ctx.Rule       := R.Name;
+            Ctx.VisitStart := if R.GroupsEdits then Node.StartByte else -1;
+            Ctx.VisitEnd   := if R.GroupsEdits then Node.EndByte else -1;
             R.Visit(Node, Ctx);
           end;
         for var I := Node.ChildCount - 1 downto 0 do

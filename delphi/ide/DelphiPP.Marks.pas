@@ -57,6 +57,48 @@ type
 const
   HoverLines = 30;            // a longer rewrite is cut, with "..."
 
+// text for a hover: its line breaks the editor's, cut after HoverLines
+function HoverText(const Bytes: TBytes): string;
+begin
+  Result := TEncoding.UTF8.GetString(Bytes).Replace(#13#10, #10).Replace(#10, sLineBreak);
+  const Lines = Result.Split([sLineBreak]);
+  if Length(Lines) > HoverLines then
+    Result := string.Join(sLineBreak, Copy(Lines, 0, HoverLines)) + sLineBreak + '...';
+end;
+
+// inside its group: the node the rule was visiting holds the edit
+function InGroup(const E: TEdit): Boolean;
+begin
+  Exit( (E.GroupEnd > E.GroupStart) and (E.StartByte >= E.GroupStart) and
+        (E.EndByte <= E.GroupEnd) );
+end;
+
+// what one visit of a rule wrote in the node it visited, when it made more than one edit
+// there: the node's text with them all applied, so case-of's hover is the whole if chain,
+// not one arm's piece (user, 12 Nov: "now shows only each line's translation .. not the
+// whole case statement as a single"). '' when the edit is alone in its group
+function GroupHover(const Text: TBytes; const Edits: TArray<TEdit>; const E: TEdit): string;
+begin
+  Result := '';
+  if not InGroup(E) then
+    Exit;
+  var Count := 0;
+  var Built: TBytes := nil;
+  var At := E.GroupStart;
+  for var G in Edits do                       // in source order, as RunWithEdits gives them
+    if (G.Rule = E.Rule) and (G.GroupStart = E.GroupStart) and (G.GroupEnd = E.GroupEnd) and
+       InGroup(G) then
+    begin
+      Inc(Count);
+      Built := Built + Copy(Text, At, G.StartByte - At) + G.Bytes;
+      At := G.EndByte;
+    end;
+  if Count < 2 then
+    Exit;
+  Built := Built + Copy(Text, At, E.GroupEnd - At);
+  Exit( E.Rule + ' writes this as:' + sLineBreak + HoverText(Built) );
+end;
+
 // what a rule writes, as the hover says it
 function EditHover(const E: TEdit; Insert: Boolean): string;
 begin
@@ -214,11 +256,12 @@ begin
     begin
       const L1 = LineOf(E.StartByte);
       const L2 = LineOf(E.EndByte);
+      const Group = GroupHover(Text, Edits, E);
       if E.StartByte = E.EndByte then
       begin
         // text added, not changed: marked at the point it goes in
         const C = ColOf(L1, E.StartByte);
-        Add(L1, C, C, mkInsert, EditHover(E, True));
+        Add(L1, C, C, mkInsert, if Group <> '' then Group else EditHover(E, True));
         Continue;
       end;
       for var L := L1 to L2 do
@@ -245,7 +288,8 @@ begin
             Break;
           end;
         if B2 > B1 then
-          Add(L, ColOf(L, B1), ColOf(L, B2), mkEdit, EditHover(E, False));
+          Add(L, ColOf(L, B1), ColOf(L, B2), mkEdit,
+              if Group <> '' then Group else EditHover(E, False));
       end;
     end;
 

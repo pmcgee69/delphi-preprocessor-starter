@@ -8,7 +8,8 @@ rules do, as you type, as Zed does.
   place `assert-message` adds its text.
 - **Hover over a mark** and, after half a second, a hint shows what the rule writes there
   (`case-of writes this as:` and the `if` chain; `assert-message adds:` and its text), or the
-  message. It goes when the mouse leaves the mark or the editor, or on a click or a key.
+  message. On any line of a rewritten `case`, the hover is the whole `if` chain: a rule whose
+  edits are one rewrite of a statement says so (`GroupsEdits`), and its edits show together. It goes when the mouse leaves the mark or the editor, or on a click or a key.
 - **A rule that fails** on the text (half typed, say) is said after line 1, and nothing else is
   shown until the text is one it can read.
 - **A rule's error, warning or hint** has a wavy underline where it is (red, amber or grey), and
