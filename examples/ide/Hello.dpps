@@ -1,0 +1,22 @@
+{$APPTYPE CONSOLE}
+program Hello;
+
+uses
+  Greet in 'Greet.pas';    // written from Greet.dpps by the pre-build event
+
+var
+  G: TGreeting;
+begin
+  G.Name  := 'Delphi';
+  G.Lang  := 'fr';
+  G.Mood  := TMood.Excited;
+  G.Times := 2;
+  WriteLn(Greeting(G));
+
+  G.Lang  := 'xx';
+  G.Mood  := TMood.Calm;
+  G.Times := 1;
+  WriteLn(Greeting(G));
+
+  Readln;
+end.
