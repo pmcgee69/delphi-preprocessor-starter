@@ -1,0 +1,88 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <!-- Everything of the Delphi side, to open in the IDE at once (File > Open Project): the
+         program (delphipp.exe: Zed's language server and tasks, and Hello's pre-build event), its
+         tests, the IDE package and its test, and the example that uses them. Project > Build All
+         builds them in this order: delphipp first, as Hello's pre-build event runs it. -->
+    <PropertyGroup>
+        <ProjectGuid>{C1D9DD8C-2A2C-42D7-B05F-1A1E667797E8}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="delphipp.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="RunTests.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="ide\DelphiPPIDE.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="ide\MarksTest.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="..\examples\ide\Hello.dproj">
+            <Dependencies>delphipp.dproj</Dependencies>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="delphipp">
+        <MSBuild Projects="delphipp.dproj"/>
+    </Target>
+    <Target Name="delphipp:Clean">
+        <MSBuild Projects="delphipp.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="delphipp:Make">
+        <MSBuild Projects="delphipp.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="RunTests">
+        <MSBuild Projects="RunTests.dproj"/>
+    </Target>
+    <Target Name="RunTests:Clean">
+        <MSBuild Projects="RunTests.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="RunTests:Make">
+        <MSBuild Projects="RunTests.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="DelphiPPIDE">
+        <MSBuild Projects="ide\DelphiPPIDE.dproj"/>
+    </Target>
+    <Target Name="DelphiPPIDE:Clean">
+        <MSBuild Projects="ide\DelphiPPIDE.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="DelphiPPIDE:Make">
+        <MSBuild Projects="ide\DelphiPPIDE.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="MarksTest">
+        <MSBuild Projects="ide\MarksTest.dproj"/>
+    </Target>
+    <Target Name="MarksTest:Clean">
+        <MSBuild Projects="ide\MarksTest.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MarksTest:Make">
+        <MSBuild Projects="ide\MarksTest.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Hello" DependsOnTargets="delphipp">
+        <MSBuild Projects="..\examples\ide\Hello.dproj"/>
+    </Target>
+    <Target Name="Hello:Clean" DependsOnTargets="delphipp:Clean">
+        <MSBuild Projects="..\examples\ide\Hello.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="Hello:Make" DependsOnTargets="delphipp:Make">
+        <MSBuild Projects="..\examples\ide\Hello.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="delphipp;RunTests;DelphiPPIDE;MarksTest;Hello"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="delphipp:Clean;RunTests:Clean;DelphiPPIDE:Clean;MarksTest:Clean;Hello:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="delphipp:Make;RunTests:Make;DelphiPPIDE:Make;MarksTest:Make;Hello:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

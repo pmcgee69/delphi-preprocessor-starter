@@ -42,15 +42,25 @@
         <DCC_Namespace>System;$(DCC_Namespace)</DCC_Namespace>
         <DCC_UnitSearchPath>TreeSitter4D\delphi;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
     </PropertyGroup>
+    <!-- Zed's language server may be running delphipp.exe, which Windows won't let the linker
+         overwrite, but will let us rename, as build.cmd does: the old one runs on till Zed
+         restarts it, and is deleted by the next build (user, 13 Nov: "people don't just want
+         command line, they want to build things in the ide") -->
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
         <DCC_Namespace>Winapi;System.Win;$(DCC_Namespace)</DCC_Namespace>
         <DCC_ExeOutput>.\bin\win32</DCC_ExeOutput>
         <DCC_DcuOutput>.\bin\win32\dcu</DCC_DcuOutput>
+        <PreBuildEvent><![CDATA[del /q "$(MSBuildProjectDirectory)\bin\win32\delphipp.old-*.exe" 2>nul
+if exist "$(MSBuildProjectDirectory)\bin\win32\delphipp.exe" move /y "$(MSBuildProjectDirectory)\bin\win32\delphipp.exe" "$(MSBuildProjectDirectory)\bin\win32\delphipp.old-%25RANDOM%25.exe" >nul
+exit /b 0]]></PreBuildEvent>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win64)'!=''">
         <DCC_Namespace>Winapi;System.Win;$(DCC_Namespace)</DCC_Namespace>
         <DCC_ExeOutput>.\bin</DCC_ExeOutput>
         <DCC_DcuOutput>.\bin\dcu</DCC_DcuOutput>
+        <PreBuildEvent><![CDATA[del /q "$(MSBuildProjectDirectory)\bin\delphipp.old-*.exe" 2>nul
+if exist "$(MSBuildProjectDirectory)\bin\delphipp.exe" move /y "$(MSBuildProjectDirectory)\bin\delphipp.exe" "$(MSBuildProjectDirectory)\bin\delphipp.old-%25RANDOM%25.exe" >nul
+exit /b 0]]></PreBuildEvent>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1)'!=''">
         <DCC_Define>RELEASE;$(DCC_Define)</DCC_Define>

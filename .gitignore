@@ -18,6 +18,11 @@ examples/ide/__recovery/
 
 # delphi: the .res the IDE writes on opening delphipp.dproj (the program has no {$R}), and its histories
 delphi/delphipp.res
+delphi/RunTests.res
+delphi/ide/DelphiPPIDE.res
+delphi/ide/MarksTest.res
+delphi/ide/__history/
+delphi/ide/__recovery/
 delphi/__history/
 delphi/__recovery/
 *.dproj.local

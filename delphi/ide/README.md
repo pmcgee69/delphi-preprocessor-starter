@@ -25,7 +25,13 @@ runs (the Python side's `ALL`). Nothing is written to disk; the build still writ
 
 ## Build it
 
-From a RAD Studio Command Prompt (after `..\get-treesitter4d.cmd`, once):
+**In the IDE** (after `..\get-treesitter4d.cmd`, once): open `..\DelphiPP.groupproj`, or
+`DelphiPPIDE.dproj` alone. In the Projects window, set `DelphiPPIDE`'s target platform to the IDE
+you run (Windows 32-bit for `bin\bds.exe`, 64-bit for `bin64\bds.exe`), build it, then right-click
+it and choose *Install*. After that, building it again in the same IDE unloads it and loads the
+new one. It builds where `build.cmd` does.
+
+**Or** from a RAD Studio Command Prompt:
 
 ```
 build.cmd
@@ -39,8 +45,9 @@ It builds one for each of Delphi 13's IDEs: `bin\win32\DelphiPPIDE.bpl` for the 
 *Component > Install Packages > Add*, and choose the `.bpl` for the IDE you run. It's listed as
 *DelphiPP: the rules in the editor*. Open a `.dpps` file, as `examples\ide\Greet.dpps`.
 
-To remove it: the same dialog, select it, *Remove*. Close the IDE before building it again:
-Windows doesn't let a loaded `.bpl` be replaced.
+To remove it: the same dialog, select it, *Remove*. Close the IDE before building it again with
+`build.cmd`: Windows doesn't let a loaded `.bpl` be replaced. (Building it in the IDE that has it
+loaded is the exception: the IDE unloads it first.)
 
 If the IDE won't start with it, remove it from the registry with the IDE closed: the value
 named after the `.bpl`'s path under `HKCU\Software\Embarcadero\BDS\37.0\Known Packages` (32-bit
@@ -48,7 +55,8 @@ IDE) or `Known Packages x64` (64-bit).
 
 ## Test it without the IDE
 
-`MarksTest.dpr` prints what the package would mark in a file, as text:
+`MarksTest.dpr` prints what the package would mark in a file, as text. In the IDE, it's
+`MarksTest` in the project group: its file is set in *Run > Parameters* (`Greet.dpps`). Or:
 
 ```
 dcc64 -Q -B -Ebin\test -NUbin\test "-NSSystem;Winapi" -U.. -U..\TreeSitter4D\delphi MarksTest.dpr

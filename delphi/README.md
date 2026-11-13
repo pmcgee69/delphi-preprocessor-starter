@@ -24,12 +24,23 @@ bin\delphipp.exe --diff X.dpr        rem what the rules change, as a diff
 The last is what an IDE project's pre-build event runs (`..\examples\ide\`), so a project needs
 no Python.
 
-Or in the IDE: open `delphipp.dproj` and build, Win64 or Win32. It builds into the same
-`bin\` and `bin\win32\` as `build.cmd`, with TreeSitter4D's units on its search path
-(`get-treesitter4d.cmd` first, as for `build.cmd`). `..\examples\ide\`'s pre-build event runs
-`bin\delphipp.exe`, the Win64 build. The project is only `delphipp.dpr` (`RunTests` is still
-`build.cmd`'s); the `.res` the IDE writes beside it is unused, as the program has no `{$R}`,
-and ignored by git.
+## In the IDE
+
+Open **`DelphiPP.groupproj`** (*File > Open Project*), after `get-treesitter4d.cmd` once. It holds
+everything, each building where `build.cmd` builds it:
+
+| Project | What it is |
+|---|---|
+| `delphipp` | the program: Zed's language server and tasks, and the example's pre-build event. Win64 into `bin\`, Win32 into `bin\win32\` |
+| `RunTests` | the tests: run it (*Run > Run Without Debugging*) and read its window |
+| `DelphiPPIDE` | the IDE package ([`ide\`](ide/)): build it for the platform of the IDE you run, then right-click it, *Install* |
+| `MarksTest` | what the package would mark in a file, as text: its file is in *Run > Parameters* |
+| `Hello` | the example ([`..\examples\ide\`](../examples/ide/)): its pre-build event runs `bin\delphipp.exe`, the Win64 build |
+
+*Project > Build All* builds them in that order. Building `delphipp` while Zed is running it is
+fine: its pre-build event moves the running one aside, as `build.cmd` does (run **editor: restart
+language server** in Zed to use the new one). The `.res` files the IDE writes beside the projects
+are unused, as none has a `{$R}`, and ignored by git.
 
 `get-treesitter4d.cmd` uses what Windows 10 and later have (git, curl, certutil, tar): it
 clones TreeSitter4D at its release tag for `TreeSitter.Api.pas`, downloads the release's
