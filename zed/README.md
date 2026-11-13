@@ -99,8 +99,7 @@ something for every example rule. You should see it in colour, with some code un
 instead. A `case` that case-of rewrites is underlined as a whole, and its hover is the whole `if`
 chain, though the rewrite is an edit an arm (so each line keeps its number). To see them all in one list, open the command palette and run **diagnostics: deploy**.
 
-(The checks, `with` and `with-try`, report a problem rather than rewrite; their warnings show with
-the rest.) 
+(The two checks, `with` and `with-try`, are written but switched off, so Zed doesn't show them.)
 
 **Apply a rule.** Click on any line of the file, so the cursor is in it, and press **Ctrl+.** (Ctrl
 and the full stop) for the *code actions*. Ctrl+. does nothing while the list of files on the left

@@ -617,9 +617,16 @@ begin
   var Id := Msg.GetValue('id');
   if Id is TJSONNull then
     Id := nil;
-  var Params := Msg.GetValue('params') as TJSONObject;
-  if Params = nil then
-    Params := TJSONObject(Msg.AddPair('params', TJSONObject.Create).GetValue('params'));
+  // params may be missing, or null (as a shutdown's often is): either is no params
+  var Params: TJSONObject;
+  if Msg.GetValue('params') is TJSONObject then
+    Params := TJSONObject(Msg.GetValue('params'))
+  else
+  begin
+    Msg.RemovePair('params').Free;
+    Params := TJSONObject.Create;
+    Msg.AddPair('params', Params);
+  end;
 
   if Method = 'initialize' then
   begin

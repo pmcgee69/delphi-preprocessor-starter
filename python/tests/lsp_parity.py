@@ -4,15 +4,13 @@ the same code actions, file by file. Needs delphi\\bin\\delphipp.exe (delphi\\bu
     python python/tests/lsp_parity.py [path\\to\\delphipp.exe]
 
 Every test case's input, the tour and the IDE example, sent as the editor would, CRLF and all.
-The Delphi side has the two checks the Python side switches off (with, with-try): their
-diagnostics and actions are left out of the comparison, and listed.
+Both run the same rules (with and with-try are switched off on both), so both must say the same.
 """
 import json, pathlib, queue, subprocess, sys, threading
 
 PY = pathlib.Path(__file__).resolve().parent.parent
 ROOT = PY.parent
 EXE = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / 'delphi' / 'bin' / 'delphipp.exe'
-DELPHI_ONLY = {'with', 'with-try'}
 
 
 class Client:
@@ -82,16 +80,12 @@ for c in (python, delphi):
 files = [ROOT / 'tests' / 'tour' / 'Tour.dpr', ROOT / 'examples' / 'ide' / 'Greet.dpps']
 files += sorted(f for f in (ROOT / 'tests' / 'cases').rglob('*')
                 if f.suffix.lower() in ('.pas', '.dpr', '.dpps') and '.out.' not in f.name)
-left_out, compared, failed = {}, 0, []
+compared, failed = 0, []
 for f in files:
     text = f.read_bytes().decode('utf-8', 'replace')
     uri = f.as_uri()
     want = python.diagnostics(uri, text)
     got = delphi.diagnostics(uri, text)
-    for d in got:
-        if d['source'] in DELPHI_ONLY:
-            left_out[d['source']] = left_out.get(d['source'], 0) + 1
-    got = [d for d in got if d['source'] not in DELPHI_ONLY]
     if sorted(map(key, want)) != sorted(map(key, got)):
         failed.append(f)
         print('DIFFERENT diagnostics:', f.relative_to(ROOT))
@@ -100,14 +94,12 @@ for f in files:
     params = {'textDocument': {'uri': uri}, 'range': {'start': {'line': 0, 'character': 0},
               'end': {'line': 0, 'character': 0}}, 'context': {'diagnostics': []}}
     want = {a['title']: a for a in python.request('textDocument/codeAction', params)['result']}
-    got = {a['title']: a for a in delphi.request('textDocument/codeAction', params)['result']
-           if not any(a['title'].startswith(f'Apply {r} ') for r in DELPHI_ONLY)}
-    # "every rule" counts the Delphi-only rules' edits too: each rule's own action is compared
-    for t in [t for t in want if not t.startswith('Apply every rule')]:
+    got = {a['title']: a for a in delphi.request('textDocument/codeAction', params)['result']}
+    for t in want:
         if want[t] != got.get(t):
             failed.append(f)
             print('DIFFERENT action:', f.relative_to(ROOT), t)
-    for t in [t for t in got if not t.startswith('Apply every rule')]:
+    for t in got:
         if t not in want:
             failed.append(f)
             print('DELPHI ONLY action:', f.relative_to(ROOT), t)
@@ -121,6 +113,6 @@ err = delphi.request('textDocument/hover', {'textDocument': {'uri': files[0].as_
 assert err['error']['code'] == -32601, err
 python.close()
 delphi.close()
-print(f'{compared} files compared; left out, Delphi only: {left_out or "none"}')
+print(f'{compared} files compared')
 assert not failed, f'{len(set(failed))} files differ'
 print('ok')

@@ -36,11 +36,12 @@ uses
   DelphiPP.Rule.Footnotes,
   DelphiPP.Rule.Derive;
 
+// the rules that run: the Python side's ALL. with and with-try are written (the with
+// rule is the one to read first) but switched off, as there (user, 13 Nov: "remove the
+// with and with-try rules"); --rules with still runs one, and their tests still run
 function AllRules: TArray<TRule>;
 begin
-  Result := [TWithStatement.Create,
-             TAssertMessage.Create,
-             TWithAndTry.Create,
+  Result := [TAssertMessage.Create,
              TUsesMerge.Create,
              TCaseOf.Create,
              TAutoProperty.Create,
@@ -49,11 +50,17 @@ begin
              TDerive.Create];
 end;
 
+// every rule written, switched on or not
+function WrittenRules: TArray<TRule>;
+begin
+  Result := [TWithStatement.Create, TWithAndTry.Create] + AllRules;
+end;
+
 function RulesNamed(const Names: string): TArray<TRule>;
 begin
-  var All := AllRules;
   if Names.Trim = '' then
-    Exit( All );
+    Exit( AllRules );
+  var All := WrittenRules;
   var Known: TArray<string>;
   for var R in All do
     Known := Known + [R.Name];

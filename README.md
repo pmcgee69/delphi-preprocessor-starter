@@ -99,7 +99,8 @@ the grammar's DLL directly.
 ## The example rules
 
 The two checks, `with` and `with-try`, are written but switched off: they are left out of `ALL` in
-`python\delphipp\rules\__init__.py`, the list of the rules that run. Add them back to have them run.
+`python\delphipp\rules\__init__.py`, the list of the rules that run, and out of `AllRules` in
+`delphi\DelphiPP.Rules.pas`. Add them back to have them run.
 
 - **`with`** (`python\delphipp\rules\with_statement.py`), a check: every `with` statement,
   reported with its objects, since each name inside it could belong to any of them.
