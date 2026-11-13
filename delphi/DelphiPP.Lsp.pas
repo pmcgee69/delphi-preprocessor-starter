@@ -247,6 +247,109 @@ begin
   Written := Copy(E.Bytes, P, NewLen - Q - P);
 end;
 
+type
+  TPiece = record
+    A, B: Integer;
+  end;
+
+// [Start, Stop) less its comments: the stretches of code between them, each without the blanks
+// after it. A squiggle is one stretch, so a rewritten case's is two, `case X of` and the arms, not
+// one over the comment between (user, 13 Nov: "it would be good if case underline excluded the
+// comment on that line"). As the Python side's code_pieces
+function CodePieces(const Raw: TBytes; Start, Stop: Integer): TArray<TPiece>;
+var
+  At: Integer;     // the piece's start, or -1 between pieces
+
+  procedure Close(J: Integer);
+  begin
+    if At < 0 then
+      Exit;
+    while (J > At) and (Raw[J - 1] in [9, 10, 13, 32]) do
+      Dec(J);
+    var P: TPiece;
+    P.A := At;
+    P.B := J;
+    Result := Result + [P];
+    At := -1;
+  end;
+
+  function Starts(I: Integer; const S: string): Boolean;
+  begin
+    Result := I + Length(S) <= Length(Raw);
+    for var K := 1 to Length(S) do
+      Result := Result and (Raw[I + K - 1] = Ord(S[K]));
+  end;
+
+  function Find(I: Integer; const S: string): Integer;
+  begin
+    while I < Length(Raw) do
+    begin
+      if Starts(I, S) then
+        Exit( I );
+      Inc(I);
+    end;
+    Exit( -1 );
+  end;
+
+begin
+  Result := nil;
+  At := -1;
+  var I := Start;
+  while I < Stop do
+  begin
+    const C = Raw[I];
+    if Starts(I, '//') then
+    begin
+      Close(I);
+      I := Min(LineEndByte(Raw, I), Stop);
+    end
+    else if (C = Ord('{')) or Starts(I, '(*') then
+    begin
+      Close(I);
+      const Brace = C = Ord('{');
+      const Found = Find(I, if Brace then '}' else '*)');
+      if Found < 0 then
+        I := Stop
+      else
+        I := Min(Found + (if Brace then 1 else 2), Stop);
+    end
+    else if C = Ord('''') then
+    begin
+      if At < 0 then
+        At := I;
+      Inc(I);
+      while (I < Stop) and (Raw[I] <> 10) do     // to its closing quote; '' is a quote in it
+      begin
+        if Raw[I] = Ord('''') then
+        begin
+          if (I + 1 < Stop) and (Raw[I + 1] = Ord('''')) then
+          begin
+            Inc(I, 2);
+            Continue;
+          end;
+          Inc(I);
+          Break;
+        end;
+        Inc(I);
+      end;
+    end
+    else
+    begin
+      if (At < 0) and not (C in [9, 10, 13, 32]) then
+        At := I;
+      Inc(I);
+    end;
+  end;
+  Close(Stop);
+  if Length(Result) = 0 then
+  begin
+    var P: TPiece;
+    P.A := Start;
+    P.B := Stop;
+    Result := [P];
+  end;
+end;
+
 // file:///D:/a%20b/X.dpr -> D:\a b\X.dpr; file://server/share/X.dpr -> \\server\share\X.dpr
 function PathOf(const Uri: string): string;
 begin
@@ -430,8 +533,9 @@ begin
           At := E.EndByte;
         end;
         Whole := Whole + Copy(Raw, At, G.Stop - At);
-        Found.AddElement(Diagnostic(Positions.Range(G.Start, G.Stop), 3, G.Rule,
-                                    WouldWrite(G.Rule, TEncoding.UTF8.GetString(Whole))));
+        const Message = WouldWrite(G.Rule, TEncoding.UTF8.GetString(Whole));
+        for var Piece in CodePieces(Raw, G.Start, G.Stop) do
+          Found.AddElement(Diagnostic(Positions.Range(Piece.A, Piece.B), 3, G.Rule, Message));
       end;
     except
       FreeAndNil(Found);

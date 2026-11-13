@@ -93,7 +93,9 @@ begin
       Built := Built + Copy(Text, At, G.StartByte - At) + G.Bytes;
       At := G.EndByte;
     end;
-  if Count < 2 then
+  // one edit is enough: two uses clauses merged are one, `;` to `uses` as `,`, and its hover is
+  // the clause merged, not the `,` (user, 13 Nov: "the uses hover is saying almost nothing")
+  if Count = 0 then
     Exit;
   Built := Built + Copy(Text, At, E.GroupEnd - At);
   Exit( E.Rule + ' writes this as:' + sLineBreak + HoverText(Built) );

@@ -86,16 +86,57 @@ begin
   Exit( Clause.Child(Clause.ChildCount - 1) );
 end;
 
-// called once for each section: walks its children, merging each clause into the one before
-procedure TUsesMerge.Visit(const Node: TNode; Ctx: TContext);
-var
-  Prev    : TNode;       // the clause before, while only comments follow it
-  HasPrev   : Boolean;
-  Commented : Boolean;   // a comment since the clause before
+type
+  // a clause of a run, and whether a comment lies between it and the clause before
+  TClause = record
+    Node     : TNode;
+    Commented: Boolean;
+  end;
+
+// one run's clauses merged: each into the one before
+procedure Merge(const Run: TArray<TClause>; Ctx: TContext);
 begin
-  HasPrev   := False;
-  Commented := False;
-  // the units of the clauses merged so far: one run, with nothing but comments between
+  if Length(Run) < 2 then
+    Exit;
+  // the run's edits are one rewrite, from its first clause to its last, so an editor's hover shows
+  // the clauses merged, not a `,` alone (user, 13 Nov: "the uses hover is saying almost nothing")
+  const SavedStart = Ctx.VisitStart;
+  const SavedEnd   = Ctx.VisitEnd;
+  Ctx.VisitStart := Run[0].Node.StartByte;
+  Ctx.VisitEnd   := Run[High(Run)].Node.EndByte;
+  try
+    for var K := 1 to High(Run) do
+    begin
+      const Prev = Run[K - 1].Node;
+      const C = Run[K].Node;
+      const SameLine = C.Child(1).Line = C.Child(0).Line;
+      if SameLine or Run[K].Commented then
+      begin
+        Ctx.Replace(Semicolon(Prev), ',');
+        // its `uses`: a space where a unit follows on the same line, so
+        // `uses System.Types;` becomes `  System.Types;`
+        if SameLine then
+          Ctx.Replace(C.Child(0), ' ')
+        else
+          Ctx.Replace(C.Child(0), '');
+      end
+      else
+        // only blanks between: the `uses` line goes with them
+        Ctx.ReplaceSpan(Semicolon(Prev), C.Child(0), ',');
+    end;
+  finally
+    Ctx.VisitStart := SavedStart;
+    Ctx.VisitEnd   := SavedEnd;
+  end;
+end;
+
+// called once for each section: walks its children, finding each run of clauses with nothing but
+// comments between them, and merging each run
+procedure TUsesMerge.Visit(const Node: TNode; Ctx: TContext);
+begin
+  var Run: TArray<TClause>;
+  var Commented := False;   // a comment since the clause before
+  // the units of the run's clauses
   var Seen := TDictionary<string, Boolean>.Create;
   try
     for var I := 0 to Node.ChildCount - 1 do
@@ -113,25 +154,10 @@ begin
             else
               Seen.Add(UnitName.ToLower, True);
           end;
-        if HasPrev then
-        begin
-          const SameLine = C.Child(1).Line = C.Child(0).Line;
-          if SameLine or Commented then
-          begin
-            Ctx.Replace(Semicolon(Prev), ',');
-            // its `uses`: a space where a unit follows on the same line, so
-            // `uses System.Types;` becomes `  System.Types;`
-            if SameLine then
-              Ctx.Replace(C.Child(0), ' ')
-            else
-              Ctx.Replace(C.Child(0), '');
-          end
-          else
-            // only blanks between: the `uses` line goes with them
-            Ctx.ReplaceSpan(Semicolon(Prev), C.Child(0), ',');
-        end;
-        Prev      := C;
-        HasPrev   := True;
+        var Clause: TClause;
+        Clause.Node      := C;
+        Clause.Commented := Commented;
+        Run := Run + [Clause];
         Commented := False;
       end
       else if C.Kind = 'comment' then
@@ -139,10 +165,12 @@ begin
       else
       begin
         // a directive (maybe alternatives follow) or a declaration: the run is over
-        HasPrev := False;
+        Merge(Run, Ctx);
+        Run := nil;
         Seen.Clear;
       end;
     end;
+    Merge(Run, Ctx);
   finally
     Seen.Free;
   end;

@@ -27,7 +27,7 @@ class UsesMerge:
     kinds = ('program', 'library', 'interface', 'implementation')
 
     def visit(self, node, ctx):
-        prev = None                 # the clause before, while only comments follow it
+        run = []                    # the run's clauses, each with: a comment since the one before
         seen = set()                # the units of the clauses in this run
         commented = False           # a comment since the clause before
         for c in node.children:
@@ -39,20 +39,35 @@ class UsesMerge:
                             ctx.report(u, f'{name} is used twice in this section', 'error')
                         else:
                             seen.add(name.lower())
-                if prev is not None:
-                    uses = c.children[0]
-                    same_line = c.children[1].start_point[0] == uses.start_point[0]
-                    if same_line or commented:
-                        ctx.replace(prev.children[-1], ',')
-                        ctx.replace(uses, ' ' if same_line else '')
-                    else:
-                        # only blanks between: the `uses` line goes with them
-                        ctx.replace_span(prev.children[-1], uses, ',')
-                prev = c
+                run.append((c, commented))
                 commented = False
             elif c.type == 'comment':
                 commented = True
             else:
                 # a directive (maybe alternatives follow) or a declaration: the run is over
-                prev = None
+                self.merge(run, ctx)
+                run = []
                 seen.clear()
+        self.merge(run, ctx)
+
+    def merge(self, run, ctx):
+        """One run's clauses merged: each into the one before."""
+        if len(run) < 2:
+            return
+        # the run's edits are one rewrite, from its first clause to its last, so an editor's hover
+        # shows the clauses merged, not a `,` alone (user, 13 Nov: "the uses hover is saying
+        # almost nothing")
+        saved = ctx.group
+        ctx.group = (run[0][0].start_byte, run[-1][0].end_byte)
+        try:
+            for (prev, _), (c, commented) in zip(run, run[1:]):
+                uses = c.children[0]
+                same_line = c.children[1].start_point[0] == uses.start_point[0]
+                if same_line or commented:
+                    ctx.replace(prev.children[-1], ',')
+                    ctx.replace(uses, ' ' if same_line else '')
+                else:
+                    # only blanks between: the `uses` line goes with them
+                    ctx.replace_span(prev.children[-1], uses, ',')
+        finally:
+            ctx.group = saved

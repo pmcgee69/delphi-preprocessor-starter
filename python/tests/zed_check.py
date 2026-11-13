@@ -59,9 +59,14 @@ m = got.get(timeout=30)
 d = m['params']['diagnostics']
 print('sources:', sorted({x['source'] for x in d}))
 assert not [x for x in d if x['severity'] == 1], 'the tour parses'
-# a case-of's edits, one an arm, are one diagnostic over the case: its whole if chain
+# a case-of's edits, one an arm, are one rewrite of the case: its whole if chain, on each piece of
+# its squiggle, which leaves out the comment after `case X of` (so two pieces, for each of the 2)
 co = [x for x in d if x['source'] == 'case-of']
-assert len(co) == 2 and all(x['message'].count('else if') == 1 for x in co), co
+assert len({x['message'] for x in co}) == 2 and len(co) == 4, co
+assert all(x['message'].count('else if') == 1 for x in co), co
+assert not any(x['range']['start']['line'] == x['range']['end']['line'] and
+               x['range']['end']['character'] > len(TOUR.split('\n')[x['range']['start']['line']].split('//')[0])
+               for x in co), 'a squiggle on a comment'
 # the IDE example has what the tour lacks (footnotes, derive): every rule switched on, between them
 GREET = PY.parent / 'examples' / 'ide' / 'Greet.dpps'
 send(method='textDocument/didOpen', params={'textDocument': {'uri': GREET.as_uri(), 'languageId': 'delphi', 'version': 1,

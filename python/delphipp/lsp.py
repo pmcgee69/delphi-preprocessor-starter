@@ -136,6 +136,50 @@ def changed_part(raw: bytes, e) -> tuple[int, int, bytes]:
     return e.start + p, e.end - q, new[p:len(new) - q]
 
 
+def code_pieces(raw: bytes, start: int, end: int) -> list[tuple[int, int]]:
+    """[start, end) less its comments: the stretches of code between them, each without the blanks
+    after it. A squiggle is one stretch, so a rewritten case's is two, `case X of` and the arms,
+    not one over the comment between (user, 13 Nov: "it would be good if case underline excluded
+    the comment on that line")."""
+    pieces, at, i = [], None, start
+
+    def close(j):
+        nonlocal at
+        if at is not None:
+            while j > at and raw[j - 1] in b' \t\r\n':
+                j -= 1
+            pieces.append((at, j))
+            at = None
+
+    while i < end:
+        c = raw[i]
+        if raw.startswith(b'//', i):
+            close(i)
+            i = min(line_end_byte(raw, i), end)
+        elif c == ord('{') or raw.startswith(b'(*', i):
+            close(i)
+            stop = raw.find(b'}' if c == ord('{') else b'*)', i)
+            i = end if stop < 0 else min(stop + (1 if c == ord('{') else 2), end)
+        elif c == ord("'"):
+            if at is None:
+                at = i
+            i += 1
+            while i < end and raw[i] != 10:     # to its closing quote; '' is a quote in it
+                if raw[i] == ord("'"):
+                    if i + 1 < end and raw[i + 1] == ord("'"):
+                        i += 2
+                        continue
+                    i += 1
+                    break
+                i += 1
+        else:
+            if at is None and c not in b' \t\r\n':
+                at = i
+            i += 1
+    close(end)
+    return pieces or [(start, end)]
+
+
 def path_of(uri: str) -> str:
     return urllib.request.url2pathname(urllib.parse.urlparse(uri).path)
 
@@ -190,8 +234,9 @@ def analyse(text: str, filename: str) -> tuple[list[dict], dict]:
             at = e.end
         whole.append(raw[at:end])
         new = b''.join(whole).decode('utf-8', 'replace')
-        found.append({'range': {'start': pos.of_byte(start), 'end': pos.of_byte(end)}, 'severity': 3,
-                      'source': rule, 'message': f'{rule} would write:\n{new.strip() or "(remove this)"}'})
+        for a, b in code_pieces(raw, start, end):
+            found.append({'range': {'start': pos.of_byte(a), 'end': pos.of_byte(b)}, 'severity': 3,
+                          'source': rule, 'message': f'{rule} would write:\n{new.strip() or "(remove this)"}'})
     return found, actions
 
 
