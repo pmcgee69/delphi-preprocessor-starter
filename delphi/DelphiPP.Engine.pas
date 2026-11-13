@@ -124,6 +124,10 @@ function WithLines(const Source: TBytes; const Edits: TArray<TEdit>; const FileN
 // writing a rule: find the kind of node it is about (delphipp --tree FILE)
 function TreeText(const Source: TBytes): string;
 
+// UTF-8 when every byte sequence is UTF-8 (a BOM or not), else Windows-1252: the caller
+// frees one that isn't TEncoding.IsStandardEncoding
+function SourceEncoding(const Source: TBytes): TEncoding;
+
 implementation
 
 uses

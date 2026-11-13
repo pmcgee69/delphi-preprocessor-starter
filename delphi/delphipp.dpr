@@ -11,6 +11,9 @@ program delphipp;
     delphipp X.dpps.pas                   the same, from a source the IDE highlights
     delphipp --msbuild ...                messages as MSBuild reads them, for the IDE
     delphipp --lsp                        a language server on stdin and stdout, for Zed
+    delphipp --build FILE [--run] [--win32]   rewrite FILE in a folder of its own, compile it
+                                          with dcc64 (dcc32), and run the program
+    delphipp --diff FILE                  what the rules change in FILE, as a diff
 
   Exit status 1 when a rule reports an error.
 
@@ -27,6 +30,7 @@ uses
   System.SysUtils, System.IOUtils, System.Types, System.Generics.Collections,
   System.RegularExpressions,
   DelphiPP.Engine,
+  DelphiPP.Build,
   DelphiPP.Lsp,
   DelphiPP.Rules;     // the rules: dcc finds their units here, beside this file
 
@@ -58,28 +62,6 @@ begin
   Exit( F.Replace('/', '\') + ':' + M.ToString );
 end;
 
-// A source's `unit X.dpps;` is, in X.pas, `unit X;` (after a UTF-8 BOM too, which the IDE may
-// write, and the {$LINE} naming the source). Matched on the bytes seen as Latin-1, one char each,
-// so a match's place is its place in the bytes, and those are cut: nothing is decoded and written
-// back.
-function Unsuffixed(const Source: TBytes): TBytes;
-const
-  Space  = '[ \t\r\n\f\v]';
-  Header = '(?im)^((?:\xEF\xBB\xBF)?(?:\{\$LINE [^}]*\})?' + Space + '*(?:unit|program|library)' + Space + '+)' +
-           '([A-Za-z0-9_.]+?)\.dpps(' + Space + '*;)';
-  Dpps   = Length('.dpps');
-begin
-  var Latin1 := '';
-  SetLength(Latin1, Length(Source));
-  for var I := 0 to High(Source) do
-    Latin1[I + 1] := Char(Source[I]);
-  const M = TRegEx.Match(Latin1, Header);
-  if not M.Success then
-    Exit( Source );
-  const Cut = M.Groups[3].Index - 1 - Dpps;     // 0-based: the byte of the '.'
-  Result := Copy(Source, 0, Cut) + Copy(Source, Cut + Dpps, MaxInt);
-end;
-
 function SameBytes(const A, B: TBytes): Boolean;
 begin
   Exit( (Length(A) = Length(B)) and CompareMem(Pointer(A), Pointer(B), Length(A)) );
@@ -92,9 +74,13 @@ var
   List    : Boolean;
   TreeOf  : string;
   MSBuild : Boolean;
+  Compile : Boolean;
+  RunIt   : Boolean;
+  Win32   : Boolean;
+  Diffs   : Boolean;
 
 begin
-  MSBuild := False;
+  MSBuild := False; Compile := False; RunIt := False; Win32 := False; Diffs := False;
   try
     var I := 1;
     while I <= ParamCount do
@@ -105,6 +91,10 @@ begin
       else if A = '--list' then List := True
       else if A = '--tree' then begin Inc(I); TreeOf := ParamStr(I); end
       else if A = '--msbuild' then MSBuild := True
+      else if A = '--build' then Compile := True
+      else if A = '--run' then RunIt := True
+      else if A = '--win32' then Win32 := True
+      else if A = '--diff' then Diffs := True
       else if A = '--lsp' then
       begin
         // the editor's: nothing else from the command line applies
@@ -130,6 +120,16 @@ begin
       end;
       if Length(Paths) = 0 then
         raise Exception.Create('give a file or a folder (or --list)');
+      if Compile or Diffs then
+      begin
+        if Length(Paths) <> 1 then
+          raise Exception.Create('--build and --diff take one file');
+        if Compile then
+          ExitCode := Build(Paths[0], Rules, RunIt, Win32)
+        else
+          ExitCode := Diff(Paths[0], Rules);
+        Exit;
+      end;
 
       var Files, Errors, Changed: Integer;
       Files := 0; Errors := 0; Changed := 0;

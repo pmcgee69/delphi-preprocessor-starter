@@ -8,6 +8,7 @@ Python, no C compiler.
 get-treesitter4d.cmd                 rem once: TreeSitter4D's units and its compiled C
 build.cmd                            rem Win64: bin\delphipp.exe, bin\RunTests.exe
 build.cmd win32                      rem Win32: bin\win32\
+build.cmd test                       rem and then the tests (either: build.cmd win32 test)
 bin\RunTests.exe                     rem the tests, ..\tests\cases, shared with the Python side
 bin\delphipp.exe --list              rem the rules
 bin\delphipp.exe --tree FILE         rem a file's tree: the kinds of node a rule can ask for
@@ -16,6 +17,8 @@ bin\delphipp.exe -o OUT FOLDER       rem and the rewritten files, under OUT
 bin\delphipp.exe X.dpps              rem write X.pas beside it, rewritten (X.dpps.pas too)
 bin\delphipp.exe --msbuild X.dpps    rem the same, messages as MSBuild reads them: a pre-build event
 bin\delphipp.exe --lsp               rem a language server on stdin and stdout: Zed's (..\zed\)
+bin\delphipp.exe --build X.dpr --run rem rewrite a copy, compile it with dcc64, run it (--win32: dcc32)
+bin\delphipp.exe --diff X.dpr        rem what the rules change, as a diff
 ```
 
 The last is what an IDE project's pre-build event runs (`..\examples\ide\`), so a project needs
@@ -47,6 +50,7 @@ Everything lands in `delphi\TreeSitter4D\`, which git ignores.
 | `DelphiPP.Rule.Derive.pas` | the `derive` rewrite: `[Derive(ToString)]` on an enumeration writes it a `ToString` |
 | `DelphiPP.Rules.pas` | the list of rules: add yours here |
 | `DelphiPP.Lsp.pas` | the language server, `--lsp`: the Python side's `lsp.py`, for Zed |
+| `DelphiPP.Build.pas` | `--build FILE [--run] [--win32]` and `--diff FILE`, Zed's tasks: the Python side's `build.py` |
 | `delphipp.dpr` | the command line |
 | `RunTests.dpr` | the tests |
 | [`ide\`](ide/) | an IDE package: the rules in the editor, in a `.dpps` file, as you type |
