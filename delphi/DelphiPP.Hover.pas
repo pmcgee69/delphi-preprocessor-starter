@@ -27,6 +27,9 @@ function CodePieces(const Raw: TBytes; Start, Stop: Integer): TArray<TPiece>;
 // what the rule writes next from E's place (an edit whose origin E's start is): derive's helper
 // declaration, from the attribute it removes. False when there is none
 function FirstRelated(const Edits: TArray<TEdit>; const E: TEdit; out Text: string): Boolean;
+// E is another edit's FirstRelated, so that edit's hover says it already: E needs no mark of its
+// own (user, 13 Nov: derive's helper, at the end of TMood's line, "the end marker is not needed")
+function InAnothersHover(const Edits: TArray<TEdit>; Index: Integer): Boolean;
 
 implementation
 
@@ -292,6 +295,22 @@ begin
       Exit( True );
     end;
   Text := '';
+  Exit( False );
+end;
+
+// By index, not place: derive's helper and its ToString can go in at the same byte (a type last in
+// its section), and only the helper is in the attribute's hover
+function InAnothersHover(const Edits: TArray<TEdit>; Index: Integer): Boolean;
+begin
+  const E = Edits[Index];
+  if E.Origin < 0 then
+    Exit( False );
+  for var F := 0 to High(Edits) do
+    if (F <> Index) and (Edits[F].Rule = E.Rule) and (Edits[F].StartByte = E.Origin) then
+      // F's first related edit: the first, in Edits' order, whose origin is F's start
+      for var O := 0 to High(Edits) do
+        if (O <> F) and (Edits[O].Rule = Edits[F].Rule) and (Edits[O].Origin = Edits[F].StartByte) then
+          Exit( O = Index );
   Exit( False );
 end;
 

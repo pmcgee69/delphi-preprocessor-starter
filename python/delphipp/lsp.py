@@ -180,6 +180,18 @@ def code_pieces(raw: bytes, start: int, end: int) -> list[tuple[int, int]]:
     return pieces or [(start, end)]
 
 
+def in_anothers_hover(edits, e) -> bool:
+    """e is the first edit another's hover lists (the first whose origin is that edit's start):
+    derive's helper declaration, in its [Derive] attribute's hover. It needs no squiggle of its own."""
+    if e.origin is None:
+        return False
+    for f in edits:
+        if f is not e and f.rule == e.rule and f.start == e.origin:
+            first = next((o for o in edits if o is not f and o.rule == f.rule and o.origin == f.start), None)
+            return first is e
+    return False
+
+
 def path_of(uri: str) -> str:
     return urllib.request.url2pathname(urllib.parse.urlparse(uri).path)
 
@@ -203,6 +215,10 @@ def analyse(text: str, filename: str) -> tuple[list[dict], dict]:
                                                'newText': new})
         if e.group is not None:
             groups.setdefault((e.rule, e.group), []).append(e)
+            continue
+        # derive's helper declaration: the [Derive] attribute's hover has it (user, 13 Nov: "the
+        # end marker is not needed")
+        if in_anothers_hover(edits, e):
             continue
         start, end, written = changed_part(raw, e)
         if end > start:

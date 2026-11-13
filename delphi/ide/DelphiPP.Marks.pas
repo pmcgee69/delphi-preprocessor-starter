@@ -254,9 +254,13 @@ begin
     end;
 
     // each edit, line by line over the lines it spans
-    for var E in Edits do
+    for var Index := 0 to High(Edits) do
     begin
+      const E = Edits[Index];
       const Group = GroupHover(Text, Edits, E);
+      // derive's helper declaration: the [Derive] attribute's hover has it
+      if (Group = '') and InAnothersHover(Edits, Index) then
+        Continue;
       // what it changes, less what it leaves as it was at either end: derive's replacing of
       // `[Derive(ToString)]   // comment` with the comment is the attribute's removal, and its
       // hover what derive adds for it, the helper's declaration (user, 13 Nov: "the triangle on

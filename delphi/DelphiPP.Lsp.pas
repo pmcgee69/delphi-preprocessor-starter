@@ -214,8 +214,9 @@ begin
         Found.AddElement(Diagnostic(Range, Severity(M.Level), M.Rule, M.Text));
       end;
 
-      for var E in Edits do
+      for var EditIndex := 0 to High(Edits) do
       begin
+        const E = Edits[EditIndex];
         const NewText = TEncoding.UTF8.GetString(E.Bytes);
         var List := Actions.GetValue(E.Rule) as TJSONArray;
         if List = nil then
@@ -248,6 +249,10 @@ begin
           Groups[Index].Edits.Add(E);
           Continue;
         end;
+        // derive's helper declaration: the [Derive] attribute's hover has it (user, 13 Nov: "the
+        // end marker is not needed")
+        if InAnothersHover(Edits, EditIndex) then
+          Continue;
         var A, B: Integer;
         var Written: TBytes;
         ChangedPart(Raw, E, A, B, Written);
