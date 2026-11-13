@@ -551,6 +551,21 @@ begin
     var Stem := Name.Substring(0, Name.Length - IfThen(Low.EndsWith('.dpps.pas'), 9, 5));
     Name := Stem + IfThen(Program_, '.dpr', '.pas');
     Text := Unsuffixed(Text);
+    // and X.pas beside it, as `delphipp X.dpps` and the IDE's pre-build event write it, so the
+    // rewrite is a file of the project to open, not one in a temp folder outside it (user, 13 Nov:
+    // "the file goes into a temp dir ... which it then doesn't want to open"). Written only when it
+    // differs, so an editor with it open sees no change where there is none
+    const Beside = TPath.Combine(ExtractFilePath(Full), Stem + '.pas');
+    const Pas = Unsuffixed(WithLines(Source, Edits, Full));
+    var Same := TFile.Exists(Beside);
+    if Same then
+    begin
+      const Old = TFile.ReadAllBytes(Beside);
+      Same := (Length(Old) = Length(Pas)) and CompareMem(Pointer(Old), Pointer(Pas), Length(Pas));
+    end;
+    if not Same then
+      TFile.WriteAllBytes(Beside, Pas);
+    Writeln('rewritten: ', Beside);
   end;
   const Target = TPath.Combine(Folder, Name);
   TFile.WriteAllBytes(Target, Text);
