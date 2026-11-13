@@ -504,12 +504,13 @@ begin
         else
           InsertionRange(Raw, A, Written, A, B);
         const Body = TEncoding.UTF8.GetString(Written).Trim;
-        // what the rule writes elsewhere from here: derive's helper and its ToString, from the
-        // attribute it removes (user, 13 Nov: "[Derive] hover ... nothing shows TMoodHelper")
+        // what the rule writes next from here: derive's helper declaration, from the attribute it
+        // removes; its ToString has a squiggle of its own where it goes (user, 13 Nov: "[Derive]
+        // hover ... nothing shows TMoodHelper", "derive is still not showing just the declaration")
         var More: TArray<string>;
         for var O in Edits do
           if ((O.StartByte <> E.StartByte) or (O.EndByte <> E.EndByte)) and (O.Rule = E.Rule) and
-             (O.Origin >= 0) and (O.Origin = E.StartByte) then
+             (O.Origin >= 0) and (O.Origin = E.StartByte) and (Length(More) = 0) then
             More := More + [TEncoding.UTF8.GetString(O.Bytes).Trim];
         var Message: string;
         if (Length(More) > 0) and (Body = '') then

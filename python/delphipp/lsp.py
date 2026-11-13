@@ -212,10 +212,11 @@ def analyse(text: str, filename: str) -> tuple[list[dict], dict]:
         else:
             start, end = insertion_range(raw, start, written)
         body = written.decode('utf-8', 'replace').strip()
-        # what the rule writes elsewhere from here: derive's helper and its ToString, from the
-        # attribute it removes (user, 13 Nov: "[Derive] hover ... nothing shows TMoodHelper")
+        # what the rule writes next from here: derive's helper declaration, from the attribute it
+        # removes; its ToString has a squiggle of its own where it goes (user, 13 Nov: "[Derive]
+        # hover ... nothing shows TMoodHelper", "derive is still not showing just the declaration")
         more = [o.text.decode('utf-8', 'replace').strip() for o in edits
-                if o is not e and o.rule == e.rule and o.origin is not None and o.origin == e.start]
+                if o is not e and o.rule == e.rule and o.origin is not None and o.origin == e.start][:1]
         if more and not body:
             message = f'{e.rule} would remove this, and write:\n' + '\n\n'.join(more)
         elif more:
