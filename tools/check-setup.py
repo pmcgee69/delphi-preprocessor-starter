@@ -37,9 +37,11 @@ if have_ts:
         report(bool(messages or edits), f'the rules run: {len(messages)} messages and {len(edits)} edits on the tour',
                'something is wrong with the rules: see the error above')
 
-print('For Zed to build the extension:')
-report(shutil.which('rustup') is not None, 'Rust, through rustup',
-       'install it from https://rustup.rs , then close and reopen Zed')
+print('For Zed (no Rust needed: the extension comes built, as zed\\extension.wasm):')
+report(shutil.which('git') is not None, 'git, which Zed uses to fetch the grammar',
+       'install it from https://git-scm.com/download/win , then close and reopen Zed')
+report((ROOT / 'delphi' / 'bin' / 'delphipp.exe').exists(), 'delphi\\bin\\delphipp.exe, the language server',
+       'run delphi\\get-treesitter4d.cmd once, then delphi\\build.cmd')
 
 print('For compiling (the rules and highlighting work without these):')
 for name, what in (('dcc64', 'Delphi Win64'), ('dcc32', 'Delphi Win32')):

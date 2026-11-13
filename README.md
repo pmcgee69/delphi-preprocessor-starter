@@ -15,8 +15,8 @@ or both.
 
 **The rules run in [Zed](https://zed.dev), a free editor, as you type.** Open a Delphi file and it
 is highlighted; the rules underline what they would change, hovering shows the new text, Ctrl+.
-applies it, and a task compiles and runs the result with dcc64. No experience of Zed, Python or Rust
-needed: about fifteen minutes, mostly downloads.
+applies it, and a task compiles and runs the result with dcc64. No experience of Zed needed, and
+neither Python nor Rust for the extension: about fifteen minutes, mostly downloads.
 
 | To | Go to |
 |---|---|
@@ -24,7 +24,8 @@ needed: about fifteen minutes, mostly downloads.
 | Follow along with tick-boxes and copy buttons | [DelphiPP in Zed](https://claude.ai/artifact/5gpt4nd8AD5bbmQ6mCafyW), the same guide as one page |
 | Write a rule and see it in Zed | [Building the QUOTES Rule](https://claude.ai/artifact/FKem1w4m1shY9nVNexdJvh), the Python walkthrough |
 
-Zed runs the Python rules; the Delphi ones run from the command line (below).
+Zed runs the Delphi rules as you type (`delphipp.exe --lsp`), or the Python ones if you choose; the
+compile tasks use the Python ones.
 
 ## In the Delphi IDE
 
@@ -48,7 +49,7 @@ owner's manual in 15 pages. It builds the Delphi `with` rule step by step, from 
 its tree - to a tested rule, then runs it over Delphi's own RTL, and finally shows a rule for two kinds
 of nodes.
 
-On the Python side, which is what Zed runs:
+On the Python side:
 [Building the QUOTES Rule](https://claude.ai/artifact/FKem1w4m1shY9nVNexdJvh), its sibling in 14
 pages, builds the simplest rewrite there is, `double-quotes`, from a sample and its tree to a tested
 rule, then shows it in Zed, and what it does to Delphi's own RTL.

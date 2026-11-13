@@ -1,9 +1,9 @@
 id = "delphipp"
 name = "Delphi (delphipp)"
-version = "0.1.0"
+version = "0.2.0"
 schema_version = 1
 authors = ["Paul McGee"]
-description = "Delphi highlighting from tree-sitter-delphi13, and delphi-preprocessor-starter's rules as you type"
+description = "Delphi highlighting from tree-sitter-delphi13, and delphi-preprocessor-starter's rules as you type, from delphipp.exe --lsp"
 repository = "https://github.com/pmcgee69/delphi-preprocessor-starter"
 
 [grammars.delphi13]

@@ -15,6 +15,7 @@ bin\delphipp.exe FOLDER              rem run them: messages
 bin\delphipp.exe -o OUT FOLDER       rem and the rewritten files, under OUT
 bin\delphipp.exe X.dpps              rem write X.pas beside it, rewritten (X.dpps.pas too)
 bin\delphipp.exe --msbuild X.dpps    rem the same, messages as MSBuild reads them: a pre-build event
+bin\delphipp.exe --lsp               rem a language server on stdin and stdout: Zed's (..\zed\)
 ```
 
 The last is what an IDE project's pre-build event runs (`..\examples\ide\`), so a project needs
@@ -45,6 +46,7 @@ Everything lands in `delphi\TreeSitter4D\`, which git ignores.
 | `DelphiPP.Rule.Footnotes.pas` | the `footnotes` rewrite: footnotes after `end.` become XMLDoc on what they name |
 | `DelphiPP.Rule.Derive.pas` | the `derive` rewrite: `[Derive(ToString)]` on an enumeration writes it a `ToString` |
 | `DelphiPP.Rules.pas` | the list of rules: add yours here |
+| `DelphiPP.Lsp.pas` | the language server, `--lsp`: the Python side's `lsp.py`, for Zed |
 | `delphipp.dpr` | the command line |
 | `RunTests.dpr` | the tests |
 | [`ide\`](ide/) | an IDE package: the rules in the editor, in a `.dpps` file, as you type |

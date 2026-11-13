@@ -1,6 +1,7 @@
 """The language server over its real protocol, and delphipp.build's line mapping. Needs dcc64.
 
-    python python/tests/zed_check.py
+    python python/tests/zed_check.py                            the Python server
+    python python/tests/zed_check.py delphi\\bin\\delphipp.exe    the Delphi one, delphipp --lsp
 """
 import json, pathlib, queue, subprocess, sys, threading
 
@@ -19,7 +20,9 @@ raw = b'a\nb\nc\nd\ne\n'
 edits = [Edit(2, 7, b'X', 'r')]     # b\nc\nd -> X
 assert [source_line(raw, edits, i) for i in range(3)] == [0, 1, 4], 'a replacement'
 
-p = subprocess.Popen([sys.executable, '-m', 'delphipp.lsp'], cwd=PY, stdin=subprocess.PIPE,
+# the Python server, or the one named: python python/tests/zed_check.py delphi\bin\delphipp.exe
+SERVER = [sys.argv[1], '--lsp'] if len(sys.argv) > 1 else [sys.executable, '-m', 'delphipp.lsp']
+p = subprocess.Popen(SERVER, cwd=PY, stdin=subprocess.PIPE,
                      stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 got = queue.Queue()
 

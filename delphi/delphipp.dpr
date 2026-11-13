@@ -10,6 +10,7 @@ program delphipp;
     delphipp X.dpps                       write X.pas beside it, rewritten
     delphipp X.dpps.pas                   the same, from a source the IDE highlights
     delphipp --msbuild ...                messages as MSBuild reads them, for the IDE
+    delphipp --lsp                        a language server on stdin and stdout, for Zed
 
   Exit status 1 when a rule reports an error.
 
@@ -26,6 +27,7 @@ uses
   System.SysUtils, System.IOUtils, System.Types, System.Generics.Collections,
   System.RegularExpressions,
   DelphiPP.Engine,
+  DelphiPP.Lsp,
   DelphiPP.Rules;     // the rules: dcc finds their units here, beside this file
 
 function IsDelphi(const Path: string): Boolean;
@@ -103,6 +105,12 @@ begin
       else if A = '--list' then List := True
       else if A = '--tree' then begin Inc(I); TreeOf := ParamStr(I); end
       else if A = '--msbuild' then MSBuild := True
+      else if A = '--lsp' then
+      begin
+        // the editor's: nothing else from the command line applies
+        Serve;
+        Exit;
+      end
       else Paths := Paths + [A];
       Inc(I);
     end;
