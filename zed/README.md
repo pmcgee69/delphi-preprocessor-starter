@@ -168,6 +168,10 @@ installed), for writing rules in Python without building anything:
 } } }
 ```
 
+In this folder it's already written, commented out, in `.zed\settings.json`: remove the `//` from
+its `"lsp"` lines, then run **editor: restart language server**. Put the `//` back to return to
+`delphipp.exe`.
+
 ## Compiling
 
 `dcc64`, Delphi's command-line compiler, builds `delphipp.exe`, and the compile tasks use it too

@@ -2,5 +2,19 @@
 {
   "file_types": {
     "Delphi": ["pas", "dpr", "dpk", "inc", "dpps"]
-  }
+  },
+
+  // The rules' language server is delphi\bin\delphipp.exe --lsp (build it with delphi\build.cmd).
+  // To run the Python one instead, uncomment this, then run "editor: restart language server".
+  // PYTHONPATH is relative to this folder, where Zed starts the server; if Zed's log says
+  // "No module named delphipp", give the python folder's full path instead.
+  // "lsp": {
+  //   "delphipp": {
+  //     "binary": {
+  //       "path": "python",
+  //       "arguments": ["-m", "delphipp.lsp"],
+  //       "env": { "PYTHONPATH": "python" }
+  //     }
+  //   }
+  // }
 }
