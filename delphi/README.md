@@ -61,7 +61,7 @@ Everything lands in `delphi\TreeSitter4D\`, which git ignores.
 | `DelphiPP.Rule.Derive.pas` | the `derive` rewrite: `[Derive(ToString)]` on an enumeration writes it a `ToString` |
 | `DelphiPP.Rules.pas` | the list of rules: add yours here |
 | `DelphiPP.Lsp.pas` | the language server, `--lsp`: the Python side's `lsp.py`, for Zed |
-| `DelphiPP.Shown.pas` | where an editor marks a rule's edit and what its hover says: shared by Zed's server and the IDE package, so they show the same |
+| `DelphiPP.Hover.pas` | where an editor marks a rule's edit and what its hover says: shared by Zed's server and the IDE package, so they show the same |
 | `DelphiPP.Build.pas` | `--build FILE [--run] [--win32]` and `--diff FILE`, Zed's tasks: the Python side's `build.py` |
 | `delphipp.dpr` | the command line |
 | `RunTests.dpr` | the tests |

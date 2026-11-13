@@ -21,7 +21,7 @@ implementation
 uses
   Winapi.Windows, System.SysUtils, System.Classes, System.Math, System.Character,
   System.JSON, System.SyncObjs, System.Generics.Collections, System.Generics.Defaults,
-  DelphiPP.Engine, DelphiPP.Rules, DelphiPP.Shown;
+  DelphiPP.Engine, DelphiPP.Rules, DelphiPP.Hover;
 
 const
   Pause = 200;    // milliseconds after the last edit before running the rules

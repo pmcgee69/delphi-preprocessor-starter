@@ -1,6 +1,6 @@
-unit DelphiPP.Shown;
+unit DelphiPP.Hover;
 
-{ Where an editor shows a rule's edit, and what it says of it: shared by Zed's language server
+{ Where an editor marks a rule's edit, and its hover text: shared by Zed's language server
   (DelphiPP.Lsp) and the IDE package (ide\DelphiPP.Marks), so the two show the same (user, 13 Nov:
   the IDE's [Derive] hover "shows two sets of text", as Zed's did). Byte offsets into the text the
   rules ran on; the Python side's lsp.py has the same, for its server. }

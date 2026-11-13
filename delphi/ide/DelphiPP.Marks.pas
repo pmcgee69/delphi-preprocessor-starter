@@ -49,7 +49,7 @@ type
 implementation
 
 uses
-  DelphiPP.Engine, DelphiPP.Rules, DelphiPP.Shown;
+  DelphiPP.Engine, DelphiPP.Rules, DelphiPP.Hover;
 
 type
   TAddSpan = reference to procedure(Line, Col1, Col2: Integer; Mark: TMark; const Hover: string);
