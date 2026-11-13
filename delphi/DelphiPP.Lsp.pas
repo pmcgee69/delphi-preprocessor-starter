@@ -150,11 +150,27 @@ begin
     Inc(Result);
 end;
 
-// An insertion's squiggle. A line of its own, put above a line (footnotes' ///): that line, and
-// on past attribute lines to the declaration under them, so hovering the declaration shows it
-// (user, 13 Nov: "i don't get any /// for tmood", over [Derive(ToString)]). Else the word at its
-// place. As the Python side's insertion_end
-function InsertionEnd(const Raw: TBytes; Start: Integer; const Text: TBytes): Integer;
+// a declaration's words before its name: `function Greeting`, `class procedure P`, `const C`
+function BeforeName(const Word: string): Boolean;
+const
+  Words: array[0..11] of string = ('class', 'function', 'procedure', 'constructor', 'destructor',
+    'operator', 'property', 'type', 'const', 'var', 'threadvar', 'resourcestring');
+begin
+  for var W in Words do
+    if SameText(W, Word) then
+      Exit( True );
+  Exit( False );
+end;
+
+// An insertion's squiggle, [A, B). A line of its own, put above a declaration (footnotes' ///):
+// the name it declares, past attribute lines and `function` and the like, so hovering TMood shows
+// TMood's /// though it goes above [Derive(ToString)] (user, 13 Nov: "i'd actually prefer if just
+// tmood, tgreeting and greeting were the underlines"). Lines of its own after a line's end
+// (derive's helper, its ToString after `implementation`): that line's last word, or its last
+// character, not a zero-width squiggle shown on the last letter (user, 13 Nov: "TMoodHelper.ToString
+// only hovers on the last letter 'n' of 'implementation'"). Else the word at its place. As the
+// Python side's insertion_range
+procedure InsertionRange(const Raw: TBytes; Start: Integer; const Text: TBytes; out A, B: Integer);
 begin
   var LineStart := Start;
   while (LineStart > 0) and (Raw[LineStart - 1] <> 10) do
@@ -169,16 +185,66 @@ begin
     var First := FirstNonBlank(Raw, Start, Stop);
     while (First < Stop) and (Raw[First] = Ord('[')) and (Stop < Length(Raw)) do
     begin
-      const NextStart = Stop + 1;
-      Stop := LineEndByte(Raw, NextStart);
-      First := FirstNonBlank(Raw, NextStart, Stop);
+      Stop := LineEndByte(Raw, Stop + 1);
+      var From := Stop;
+      while (From > 0) and (Raw[From - 1] <> 10) do
+        Dec(From);
+      First := FirstNonBlank(Raw, From, Stop);
     end;
-    if (Stop > Start) and (Raw[Stop - 1] = 13) then
-      Dec(Stop);
-    if Stop > Start then
-      Exit( Stop );
+    var At := First;
+    while At < Stop do
+    begin
+      var WordStop := At;
+      while (WordStop < Stop) and IsWordByte(Raw[WordStop]) do
+        Inc(WordStop);
+      if WordStop = At then
+        Break;
+      if not BeforeName(TEncoding.UTF8.GetString(Raw, At, WordStop - At)) then
+      begin
+        A := At;
+        B := WordStop;
+        Exit;
+      end;
+      At := FirstNonBlank(Raw, WordStop, Stop);
+    end;
   end;
-  Exit( WordEnd(Raw, Start) );
+  if (Length(Text) > 0) and (Text[0] in [10, 13]) and Blank(Raw, Start, LineEndByte(Raw, Start)) then
+  begin
+    B := Start;
+    while (B > LineStart) and (Raw[B - 1] in [9, 13, 32]) do
+      Dec(B);
+    A := B;
+    while (A > LineStart) and IsWordByte(Raw[A - 1]) do
+      Dec(A);
+    if (A = B) and (B > LineStart) then
+      A := B - 1;
+    if A < B then
+      Exit;
+  end;
+  A := Start;
+  B := WordEnd(Raw, Start);
+end;
+
+// An edit less what it leaves as it was, at both ends: derive's replacing of
+// `[Derive(ToString)]   // comment` with `// comment` is the attribute's removal. Whole UTF-8
+// characters only. As the Python side's changed_part
+procedure ChangedPart(const Raw: TBytes; const E: TEdit; out A, B: Integer; out Written: TBytes);
+begin
+  const OldLen = E.EndByte - E.StartByte;
+  const NewLen = Length(E.Bytes);
+  var P := 0;
+  while (P < OldLen) and (P < NewLen) and (Raw[E.StartByte + P] = E.Bytes[P]) do
+    Inc(P);
+  while (P > 0) and (P < NewLen) and ((E.Bytes[P] and $C0) = $80) do
+    Dec(P);
+  var Q := 0;
+  while (Q < OldLen - P) and (Q < NewLen - P) and (Raw[E.EndByte - 1 - Q] = E.Bytes[NewLen - 1 - Q]) do
+    Inc(Q);
+  while (Q > 0) and ((E.Bytes[NewLen - Q] and $C0) = $80) do
+    Dec(Q);
+  A := E.StartByte + P;
+  B := E.EndByte - Q;
+  Written := Copy(E.Bytes, P, NewLen - Q - P);
 end;
 
 // file:///D:/a%20b/X.dpr -> D:\a b\X.dpr; file://server/share/X.dpr -> \\server\share\X.dpr
@@ -323,10 +389,33 @@ begin
           Groups[Index].Edits.Add(E);
           Continue;
         end;
-        var Stop := E.EndByte;
-        if Stop <= E.StartByte then
-          Stop := InsertionEnd(Raw, E.StartByte, E.Bytes);
-        Found.AddElement(Diagnostic(Positions.Range(E.StartByte, Stop), 3, E.Rule, WouldWrite(E.Rule, NewText)));
+        var A, B: Integer;
+        var Written: TBytes;
+        ChangedPart(Raw, E, A, B, Written);
+        if B > A then
+        begin
+          if Blank(Written, 0, Length(Written)) then
+            while (B > A) and (Raw[B - 1] in [9, 32]) do     // the blanks it takes after it
+              Dec(B);
+        end
+        else
+          InsertionRange(Raw, A, Written, A, B);
+        const Body = TEncoding.UTF8.GetString(Written).Trim;
+        // what the rule writes elsewhere from here: derive's helper and its ToString, from the
+        // attribute it removes (user, 13 Nov: "[Derive] hover ... nothing shows TMoodHelper")
+        var More: TArray<string>;
+        for var O in Edits do
+          if ((O.StartByte <> E.StartByte) or (O.EndByte <> E.EndByte)) and (O.Rule = E.Rule) and
+             (O.Origin >= 0) and (O.Origin = E.StartByte) then
+            More := More + [TEncoding.UTF8.GetString(O.Bytes).Trim];
+        var Message: string;
+        if (Length(More) > 0) and (Body = '') then
+          Message := E.Rule + ' would remove this, and write:'#10 + string.Join(#10#10, More)
+        else if Length(More) > 0 then
+          Message := E.Rule + ' would write:'#10 + Body + #10#10'and:'#10 + string.Join(#10#10, More)
+        else
+          Message := WouldWrite(E.Rule, TEncoding.UTF8.GetString(Written));
+        Found.AddElement(Diagnostic(Positions.Range(A, B), 3, E.Rule, Message));
       end;
 
       // a rule's edits from one visit (a case-of's, one an arm) as one diagnostic over the

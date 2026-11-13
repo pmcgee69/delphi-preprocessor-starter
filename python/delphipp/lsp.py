@@ -62,25 +62,78 @@ def word_end(raw: bytes, offset: int) -> int:
     return i if i > offset else min(offset + 1, stop)
 
 
-def insertion_end(raw: bytes, start: int, text: bytes) -> int:
-    """An insertion's squiggle. A line of its own, put above a line (footnotes' ///): that line,
-    and on past attribute lines to the declaration under them, so hovering the declaration
-    shows it (user, 13 Nov: "i don't get any /// for tmood", over [Derive(ToString)]). Else the
-    word at its place."""
+def is_word(b: int) -> bool:
+    return chr(b).isalnum() or b == ord('_')
+
+
+def first_non_blank(raw: bytes, start: int, end: int) -> int:
+    while start < end and raw[start] in b' \t\r\n\f\v':
+        start += 1
+    return start
+
+
+# words before a declaration's name: `function Greeting`, `class procedure P`, `const C`
+BEFORE_NAME = {b'class', b'function', b'procedure', b'constructor', b'destructor', b'operator',
+               b'property', b'type', b'const', b'var', b'threadvar', b'resourcestring'}
+
+
+def insertion_range(raw: bytes, start: int, text: bytes) -> tuple[int, int]:
+    """An insertion's squiggle. A line of its own, put above a declaration (footnotes' ///): the
+    name it declares, past attribute lines and `function` and the like, so hovering TMood shows
+    TMood's /// though it goes above [Derive(ToString)] (user, 13 Nov: "i'd actually prefer if
+    just tmood, tgreeting and greeting were the underlines"). Else the word at its place."""
     line_start = raw.rfind(b'\n', 0, start) + 1
     last_break = text.rfind(b'\n')
     if last_break >= 0 and not raw[line_start:start].strip() and not text[last_break + 1:].strip():
         end = line_end_byte(raw, start)
-        line = raw[start:end].strip()
-        while line.startswith(b'[') and end < len(raw):
-            next_start = end + 1
-            end = line_end_byte(raw, next_start)
-            line = raw[next_start:end].strip()
-        if end > start and raw[end - 1] == 13:
-            end -= 1
-        if end > start:
-            return end
-    return word_end(raw, start)
+        first = first_non_blank(raw, start, end)
+        while first < end and raw[first] == ord('[') and end < len(raw):
+            end = line_end_byte(raw, end + 1)
+            first = first_non_blank(raw, raw.rfind(b'\n', 0, end) + 1, end)
+        at = first
+        while at < end:
+            stop = at
+            while stop < end and is_word(raw[stop]):
+                stop += 1
+            if stop == at:
+                break
+            if raw[at:stop].lower() not in BEFORE_NAME:
+                return at, stop
+            at = first_non_blank(raw, stop, end)
+    # lines of its own after a line's end (derive's helper after `TMood = (...);`, its ToString
+    # after `implementation`): that line's last word, or its last character, not a zero-width
+    # squiggle that an editor shows on the last letter (user, 13 Nov: "TMoodHelper.ToString only
+    # hovers on the last letter 'n' of 'implementation'")
+    if text[:1] in (b'\r', b'\n') and not raw[start:line_end_byte(raw, start)].strip():
+        b = start
+        while b > line_start and raw[b - 1] in b' \t\r':
+            b -= 1
+        a = b
+        while a > line_start and is_word(raw[a - 1]):
+            a -= 1
+        if a == b and b > line_start:
+            a = b - 1
+        if a < b:
+            return a, b
+    return start, word_end(raw, start)
+
+
+def changed_part(raw: bytes, e) -> tuple[int, int, bytes]:
+    """An edit less what it leaves as it was, at both ends: derive's replacing of
+    `[Derive(ToString)]   // comment` with `// comment` is the attribute's removal. Whole UTF-8
+    characters only."""
+    old, new = raw[e.start:e.end], e.text
+    p = 0
+    while p < len(old) and p < len(new) and old[p] == new[p]:
+        p += 1
+    while 0 < p < len(new) and new[p] & 0xC0 == 0x80:
+        p -= 1
+    q = 0
+    while q < len(old) - p and q < len(new) - p and old[-1 - q] == new[-1 - q]:
+        q += 1
+    while q > 0 and new[len(new) - q] & 0xC0 == 0x80:
+        q -= 1
+    return e.start + p, e.end - q, new[p:len(new) - q]
 
 
 def path_of(uri: str) -> str:
@@ -107,9 +160,26 @@ def analyse(text: str, filename: str) -> tuple[list[dict], dict]:
         if e.group is not None:
             groups.setdefault((e.rule, e.group), []).append(e)
             continue
-        end = e.end if e.end > e.start else insertion_end(raw, e.start, e.text)
-        found.append({'range': {'start': pos.of_byte(e.start), 'end': pos.of_byte(end)}, 'severity': 3,
-                      'source': e.rule, 'message': f'{e.rule} would write:\n{new.strip() or "(remove this)"}'})
+        start, end, written = changed_part(raw, e)
+        if end > start:
+            if not written.strip():
+                while end > start and raw[end - 1] in b' \t':     # the blanks it takes after it
+                    end -= 1
+        else:
+            start, end = insertion_range(raw, start, written)
+        body = written.decode('utf-8', 'replace').strip()
+        # what the rule writes elsewhere from here: derive's helper and its ToString, from the
+        # attribute it removes (user, 13 Nov: "[Derive] hover ... nothing shows TMoodHelper")
+        more = [o.text.decode('utf-8', 'replace').strip() for o in edits
+                if o is not e and o.rule == e.rule and o.origin is not None and o.origin == e.start]
+        if more and not body:
+            message = f'{e.rule} would remove this, and write:\n' + '\n\n'.join(more)
+        elif more:
+            message = f'{e.rule} would write:\n{body}\n\nand:\n' + '\n\n'.join(more)
+        else:
+            message = f'{e.rule} would write:\n{body or "(remove this)"}'
+        found.append({'range': {'start': pos.of_byte(start), 'end': pos.of_byte(end)}, 'severity': 3,
+                      'source': e.rule, 'message': message})
     # a rule's edits from one visit (a case-of's, one an arm) as one diagnostic over the node,
     # whose message is the node as rewritten: the whole if chain, as the IDE's hover shows it
     for (rule, (start, end)), group in groups.items():
