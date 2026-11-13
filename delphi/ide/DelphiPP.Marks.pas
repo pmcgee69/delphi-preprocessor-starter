@@ -49,7 +49,7 @@ type
 implementation
 
 uses
-  DelphiPP.Engine, DelphiPP.Rules;
+  DelphiPP.Engine, DelphiPP.Rules, DelphiPP.Shown;
 
 type
   TAddSpan = reference to procedure(Line, Col1, Col2: Integer; Mark: TMark; const Hover: string);
@@ -256,24 +256,60 @@ begin
     // each edit, line by line over the lines it spans
     for var E in Edits do
     begin
-      const L1 = LineOf(E.StartByte);
-      const L2 = LineOf(E.EndByte);
       const Group = GroupHover(Text, Edits, E);
-      if E.StartByte = E.EndByte then
+      // what it changes, less what it leaves as it was at either end: derive's replacing of
+      // `[Derive(ToString)]   // comment` with the comment is the attribute's removal, and its
+      // hover what derive adds for it, the helper's declaration (user, 13 Nov: "the triangle on
+      // [Derive] shows two sets of text"). A group keeps its edits whole: its hover is the node
+      var EStart := E.StartByte;
+      var EEnd := E.EndByte;
+      var Written := E.Bytes;
+      var Hover := Group;
+      if Group = '' then
       begin
-        // text added, not changed: marked at the point it goes in
-        const C = ColOf(L1, E.StartByte);
-        Add(L1, C, C, mkInsert, if Group <> '' then Group else EditHover(E, True));
+        ChangedPart(Text, E, EStart, EEnd, Written);
+        if (EEnd > EStart) and Blank(Written, 0, Length(Written)) then
+          while (EEnd > EStart) and (Text[EEnd - 1] in [9, 32]) do     // the blanks it takes after it
+            Dec(EEnd);
+        var Changed := E;
+        Changed.Bytes := Written;
+        Hover := EditHover(Changed, EEnd = EStart);
+        var More: string;
+        if FirstRelated(Edits, E, More) then
+          if Blank(Written, 0, Length(Written)) then
+            Hover := E.Rule + ' removes this, and adds:' + sLineBreak + HoverText(TEncoding.UTF8.GetBytes(More))
+          else
+            Hover := Hover + sLineBreak + sLineBreak + 'and adds:' + sLineBreak +
+                     HoverText(TEncoding.UTF8.GetBytes(More));
+      end;
+      const L1 = LineOf(EStart);
+      const L2 = LineOf(EEnd);
+      if EStart = EEnd then
+      begin
+        // text added, not changed: marked at the point it goes in, or, a line of its own above a
+        // declaration (footnotes' ///), at the name it declares: TMood's, though it goes above
+        // [Derive(ToString)], so the two hovers aren't one (user, 13 Nov, as in Zed)
+        var NameStart, NameEnd: Integer;
+        if (Group = '') and DeclaredName(Text, EStart, Written, NameStart, NameEnd) then
+        begin
+          const L = LineOf(NameStart);
+          Add(L, ColOf(L, NameStart), ColOf(L, NameEnd), mkInsert, Hover);
+        end
+        else
+        begin
+          const C = ColOf(L1, EStart);
+          Add(L1, C, C, mkInsert, Hover);
+        end;
         Continue;
       end;
       for var L := L1 to L2 do
       begin
         // a line inside the range: from its first character, not its indent
-        var B1 := if L = L1 then E.StartByte else Starts[L - 1];
+        var B1 := if L = L1 then EStart else Starts[L - 1];
         if L > L1 then
           while (B1 < LineEnd(L)) and (Text[B1] in [9, 32]) do
             Inc(B1);
-        var B2 := if L = L2 then E.EndByte else LineEnd(L);
+        var B2 := if L = L2 then EEnd else LineEnd(L);
         // not under a // comment at the end of the line: the rule only moves it
         var InQuote := False;
         for var B := Starts[L - 1] to B2 - 2 do
@@ -290,8 +326,7 @@ begin
             Break;
           end;
         if B2 > B1 then
-          Add(L, ColOf(L, B1), ColOf(L, B2), mkEdit,
-              if Group <> '' then Group else EditHover(E, False));
+          Add(L, ColOf(L, B1), ColOf(L, B2), mkEdit, Hover);
       end;
     end;
 

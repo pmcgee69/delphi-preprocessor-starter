@@ -75,6 +75,7 @@
         <DCCReference Include="DelphiPP.IDE.pas"/>
         <DCCReference Include="DelphiPP.Marks.pas"/>
         <DCCReference Include="..\DelphiPP.Engine.pas"/>
+        <DCCReference Include="..\DelphiPP.Shown.pas"/>
         <DCCReference Include="..\DelphiPP.Rules.pas"/>
         <DCCReference Include="..\DelphiPP.Rule.WithStatement.pas"/>
         <DCCReference Include="..\DelphiPP.Rule.AssertMessage.pas"/>
