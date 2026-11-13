@@ -62,6 +62,27 @@ def word_end(raw: bytes, offset: int) -> int:
     return i if i > offset else min(offset + 1, stop)
 
 
+def insertion_end(raw: bytes, start: int, text: bytes) -> int:
+    """An insertion's squiggle. A line of its own, put above a line (footnotes' ///): that line,
+    and on past attribute lines to the declaration under them, so hovering the declaration
+    shows it (user, 13 Nov: "i don't get any /// for tmood", over [Derive(ToString)]). Else the
+    word at its place."""
+    line_start = raw.rfind(b'\n', 0, start) + 1
+    last_break = text.rfind(b'\n')
+    if last_break >= 0 and not raw[line_start:start].strip() and not text[last_break + 1:].strip():
+        end = line_end_byte(raw, start)
+        line = raw[start:end].strip()
+        while line.startswith(b'[') and end < len(raw):
+            next_start = end + 1
+            end = line_end_byte(raw, next_start)
+            line = raw[next_start:end].strip()
+        if end > start and raw[end - 1] == 13:
+            end -= 1
+        if end > start:
+            return end
+    return word_end(raw, start)
+
+
 def path_of(uri: str) -> str:
     return urllib.request.url2pathname(urllib.parse.urlparse(uri).path)
 
@@ -86,7 +107,7 @@ def analyse(text: str, filename: str) -> tuple[list[dict], dict]:
         if e.group is not None:
             groups.setdefault((e.rule, e.group), []).append(e)
             continue
-        end = e.end if e.end > e.start else word_end(raw, e.start)
+        end = e.end if e.end > e.start else insertion_end(raw, e.start, e.text)
         found.append({'range': {'start': pos.of_byte(e.start), 'end': pos.of_byte(end)}, 'severity': 3,
                       'source': e.rule, 'message': f'{e.rule} would write:\n{new.strip() or "(remove this)"}'})
     # a rule's edits from one visit (a case-of's, one an arm) as one diagnostic over the node,

@@ -133,6 +133,54 @@ begin
   Exit( Min(Offset + 1, Stop) );
 end;
 
+// blanks only, as Python's bytes.strip() sees them
+function Blank(const Raw: TBytes; StartByte, EndByte: Integer): Boolean;
+begin
+  for var I := StartByte to EndByte - 1 do
+    if not (Raw[I] in [9..13, 32]) then
+      Exit( False );
+  Exit( True );
+end;
+
+// the first byte that isn't blank in [StartByte, EndByte), or EndByte
+function FirstNonBlank(const Raw: TBytes; StartByte, EndByte: Integer): Integer;
+begin
+  Result := StartByte;
+  while (Result < EndByte) and (Raw[Result] in [9..13, 32]) do
+    Inc(Result);
+end;
+
+// An insertion's squiggle. A line of its own, put above a line (footnotes' ///): that line, and
+// on past attribute lines to the declaration under them, so hovering the declaration shows it
+// (user, 13 Nov: "i don't get any /// for tmood", over [Derive(ToString)]). Else the word at its
+// place. As the Python side's insertion_end
+function InsertionEnd(const Raw: TBytes; Start: Integer; const Text: TBytes): Integer;
+begin
+  var LineStart := Start;
+  while (LineStart > 0) and (Raw[LineStart - 1] <> 10) do
+    Dec(LineStart);
+  var LastBreak := -1;
+  for var I := 0 to High(Text) do
+    if Text[I] = 10 then
+      LastBreak := I;
+  if (LastBreak >= 0) and Blank(Raw, LineStart, Start) and Blank(Text, LastBreak + 1, Length(Text)) then
+  begin
+    var Stop := LineEndByte(Raw, Start);
+    var First := FirstNonBlank(Raw, Start, Stop);
+    while (First < Stop) and (Raw[First] = Ord('[')) and (Stop < Length(Raw)) do
+    begin
+      const NextStart = Stop + 1;
+      Stop := LineEndByte(Raw, NextStart);
+      First := FirstNonBlank(Raw, NextStart, Stop);
+    end;
+    if (Stop > Start) and (Raw[Stop - 1] = 13) then
+      Dec(Stop);
+    if Stop > Start then
+      Exit( Stop );
+  end;
+  Exit( WordEnd(Raw, Start) );
+end;
+
 // file:///D:/a%20b/X.dpr -> D:\a b\X.dpr; file://server/share/X.dpr -> \\server\share\X.dpr
 function PathOf(const Uri: string): string;
 begin
@@ -277,7 +325,7 @@ begin
         end;
         var Stop := E.EndByte;
         if Stop <= E.StartByte then
-          Stop := WordEnd(Raw, E.StartByte);
+          Stop := InsertionEnd(Raw, E.StartByte, E.Bytes);
         Found.AddElement(Diagnostic(Positions.Range(E.StartByte, Stop), 3, E.Rule, WouldWrite(E.Rule, NewText)));
       end;
 
