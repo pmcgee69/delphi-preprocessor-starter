@@ -1,4 +1,4 @@
-; From tree-sitter-delphi13 (MIT, Alexander Liberov), queries/highlights.scm at 5e59a27. One
+; From tree-sitter-delphi13 (MIT, Alexander Liberov), queries/highlights.scm at 5e59a27 (the same in v1.4.11, 5f855ad). One
 ; change: the catch-all comes first. Zed lets a later pattern win, the other way round from
 ; tree-sitter's own CLI, so last it would paint over every declaration's name.
 

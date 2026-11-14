@@ -8,7 +8,7 @@ repository = "https://github.com/pmcgee69/delphi-preprocessor-starter"
 
 [grammars.delphi13]
 repository = "https://github.com/Alexl-git/tree-sitter-delphi13"
-rev = "5e59a27edc6eb5703feb23071dc9f0d1d9e41e85"
+rev = "5f855ada6e81b284c501432266f8519e8ae5c6cc"
 
 [language_servers.delphipp]
 name = "delphipp"
