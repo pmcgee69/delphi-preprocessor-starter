@@ -137,8 +137,15 @@ Put the `//` back afterwards.
 To name one, run **zed: open settings** and add:
 
 ```json
-"lsp": { "delphipp": { "binary": { "path": "C:\\delphipp\\delphi\\bin\\delphipp.exe" } } }
+"lsp": { "delphipp": { "binary": {
+  "path": "C:\\delphipp\\delphi\\bin\\delphipp.exe",
+  "arguments": ["--lsp"]
+} } }
 ```
+
+Name the arguments too: once a path is set, the extension takes its arguments from the setting,
+and `delphipp.exe` started with none stops at once (*"delphipp: give a file or a folder (or
+--list)"*, and Zed says the server reset the connection).
 
 ## Using the Python rules in Zed
 
