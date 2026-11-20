@@ -19,6 +19,13 @@ rules do, as you type, as Zed does.
   extensions, so the registry step in [`examples\ide\README.md`](../../examples/ide/README.md)
   isn't needed.
 
+**Go to implementation**, in any Delphi file, `.pas` too: Ctrl+click on `x.DoSomething()` goes to
+the interface; **Ctrl+Alt+click** goes to the classes' methods that implement it, or right-click
+and choose **Go to Implementation**, below Find Declaration. One goes straight there; more show a
+menu to choose from. It reads the active project's units (its folder and its search path) in the
+background: `DelphiPP.GoToImpl.pas`, with the index `..\DelphiPP.Impl.pas` that delphipp's
+language server uses for Zed. To try it: [`examples\go-to-implementation`](../../examples/go-to-implementation/).
+
 The rules run inside the IDE, on the editor's text, each time it changes: the Delphi engine and
 rules (`..\DelphiPP.Engine.pas`, `..\DelphiPP.Rules.pas`), and the same ones the pre-build event
 runs (the Python side's `ALL`). Nothing is written to disk; the build still writes the `.pas`.

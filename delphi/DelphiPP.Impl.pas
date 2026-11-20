@@ -32,6 +32,13 @@ type
 // start indexing the folder's units in the background (again: a fresh index)
 procedure IndexFolder(const Folder: string);
 
+// the same for a project: the .pas under each of Deep, with their subfolders, and those directly
+// in each of Flat (a search path, read as the compiler reads it); each file once
+procedure IndexFolders(const Deep, Flat: TArray<string>);
+
+// the files in the index, once it is built (0 while building)
+function IndexedCount: Integer;
+
 // the implementations for the name at Line, Character (LSP's: from 0, UTF-16 units) in Text,
 // the file at Path as the editor has it; waits for the index up to WaitMs
 function Implementations(const Path, Text: string; Line, Character: Integer;
@@ -77,6 +84,9 @@ var
   Impls: TDictionary<string, TPlace>;
   Funcs: TDictionary<string, string>;
   ImplCache: TObjectDictionary<string, TList<string>>;
+  Stopping: Boolean;                  // the unit finalizing (the IDE unloading its package)
+  Built: Boolean;
+  Running: Integer;                   // indexing threads not yet finished
 
 constructor TTypeInfo.Create;
 begin
@@ -404,21 +414,30 @@ begin
     IndexNode(FileIdx, Src, C, InType);
 end;
 
-procedure Build(const Folder: string);
+procedure Build(const Deep, Flat: TArray<string>);
 begin
   const Parser = ts_parser_new;
+  const Seen = TDictionary<string, Boolean>.Create;
   try
     ts_parser_set_language(Parser, tree_sitter_delphi13);
     var Files: TArray<string> := nil;
+    for var I := 0 to High(Deep) + Length(Flat) do
     try
-      Files := TDirectory.GetFiles(Folder, '*.pas', TSearchOption.soAllDirectories);
+      if I <= High(Deep) then
+        Files := Files + TDirectory.GetFiles(Deep[I], '*.pas', TSearchOption.soAllDirectories)
+      else
+        Files := Files + TDirectory.GetFiles(Flat[I - Length(Deep)], '*.pas', TSearchOption.soTopDirectoryOnly);
     except
-      // a folder we can't read: an empty index
+      // a folder we can't read, or one that isn't there: the others
     end;
     for var F in Files do
     begin
-      if Paths.Count >= 20000 then
-        Break;                        // a whole drive opened as a workspace: enough
+      if Stopping or (Paths.Count >= 20000) then
+        Break;                        // unloading; or a whole drive opened as a workspace: enough
+      const FK = TPath.GetFullPath(F).ToLower;
+      if Seen.ContainsKey(FK) then
+        Continue;                     // the project's folder is on its search path too
+      Seen.Add(FK, True);
       var Src: TBytesA;
       try
         Src := Bytes(TextOfFile(F));
@@ -435,28 +454,52 @@ begin
       end;
     end;
   finally
+    Seen.Free;
     ts_parser_delete(Parser);
   end;
 end;
 
-procedure IndexFolder(const Folder: string);
+procedure IndexFolders(const Deep, Flat: TArray<string>);
 begin
   Ready.ResetEvent;
+  TInterlocked.Increment(Running);
+  Built := False;
   TThread.CreateAnonymousThread(procedure
     begin
-      Lock.Enter;
       try
-        Paths.Clear; Globals.Clear; Types.Clear; Impls.Clear; Funcs.Clear; ImplCache.Clear;
+        Lock.Enter;
         try
-          Build(Folder);
-        except
-          // what was indexed before the failure stays
+          Paths.Clear; Globals.Clear; Types.Clear; Impls.Clear; Funcs.Clear; ImplCache.Clear;
+          try
+            Build(Deep, Flat);
+          except
+            // what was indexed before the failure stays
+          end;
+        finally
+          Built := True;
+          Lock.Leave;
+          Ready.SetEvent;
         end;
       finally
-        Lock.Leave;
-        Ready.SetEvent;
+        TInterlocked.Decrement(Running);
       end;
     end).Start;
+end;
+
+procedure IndexFolder(const Folder: string);
+begin
+  IndexFolders([Folder], nil);
+end;
+
+function IndexedCount: Integer;
+begin
+  Result := 0;
+  if Built and Lock.TryEnter then
+  try
+    Result := Paths.Count;
+  finally
+    Lock.Leave;
+  end;
 end;
 
 { queries }
@@ -816,4 +859,20 @@ initialization
   Impls := TDictionary<string, TPlace>.Create;
   Funcs := TDictionary<string, string>.Create;
   ImplCache := TObjectDictionary<string, TList<string>>.Create([doOwnsValues]);
+
+finalization
+  // an index still being built stops at its next file; nothing is freed under it (the IDE
+  // package unloading: its thread would run on in freed memory)
+  Stopping := True;
+  while TInterlocked.CompareExchange(Running, 0, 0) > 0 do
+    Sleep(10);
+  ImplCache.Free;
+  Funcs.Free;
+  Impls.Free;
+  Types.Free;
+  Globals.Free;
+  Paths.Free;
+  KindNames.Free;
+  Ready.Free;
+  Lock.Free;
 end.
