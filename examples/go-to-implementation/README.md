@@ -2,7 +2,7 @@
 
 In Delphi, Ctrl+click on `x.DoSomething()` goes to the interface's declaration. With the IDE
 package (`delphi\ide\DelphiPPIDE.bpl`, see [its README](../../delphi/ide/README.md)) installed,
-**Ctrl+Alt+click** goes to the classes that implement it, or right-click the method's name and
+**Ctrl+Shift+click** (or Ctrl+Alt+click) goes to the classes that implement it, or right-click the method's name and
 choose **Go to Implementation**, just below Find Declaration. With one implementation it goes
 straight there; with more, a menu lists them, each with its unit and line.
 

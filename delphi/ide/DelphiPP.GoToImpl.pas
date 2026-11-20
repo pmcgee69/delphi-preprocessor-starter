@@ -3,7 +3,7 @@ unit DelphiPP.GoToImpl;
 { Go to implementation in the Delphi IDE's editor: on a call through an interface,
   `x.DoSomething()`, each class's method that implements it, as Zed has it through
   delphipp's language server (..\DelphiPP.Impl.pas, the same index). Ctrl+click goes
-  to the interface; Ctrl+Alt+click on the method's name, or Go to Implementation on
+  to the interface; Ctrl+Shift+click (or Ctrl+Alt+click) on the method's name, or Go to Implementation on
   the editor's right-click menu (after Find Declaration), goes to the class: straight
   there when there is one, a menu to choose from when there are more. Wished for by
   a Delphi developer, passed on by the user (20 Nov): "In delphi it's so much harder
@@ -42,7 +42,8 @@ type
     FDeclActions: TActionList;
     FTargets : TArray<TImplTarget>;
     FIndexKey: string;                // what the index was built from: the project and its path
-    FTaken   : Boolean;               // a Ctrl+Alt mouse-down taken: its mouse-up too
+    FTaken   : Boolean;               // a Ctrl+Shift or Ctrl+Alt mouse-down taken: its mouse-up too
+    FAltHeld : Boolean;               // asked by Ctrl+Alt+click: wait for the keys too
     // the answer, held until Ctrl, Alt and the mouse button are up: Alt let go opens the IDE's
     // main menu, which closed the popup as it opened (user, 20 Nov: "the same dialog flickers
     // ghost-like only for a small part of a second, no text visible")
@@ -257,7 +258,7 @@ begin
   const A  = TAction.Create(FActions);
   A.ActionList := FActions;
   A.Caption    := 'Go to Implementation';
-  A.Hint       := 'The classes'' methods that implement this interface method (Ctrl+Alt+click)';
+  A.Hint       := 'The classes'' methods that implement this interface method (Ctrl+Shift+click)';
   A.Category   := MenuCategory;
   A.OnExecute  := OnExecute;
   A.OnUpdate   := OnUpdateImplementation;
@@ -292,7 +293,9 @@ begin
     // with the keys still held (and Alt "disarmed" by a dummy key at the click), it flickered or
     // seemed not to show at all (user, 20 Nov: "^Alt-click naively seems to do nothing ... but
     // ^click, followed by ^Alt-click, flickers the same (prob) msg box for an instant")
-    if (GetAsyncKeyState(VK_MENU) < 0) or (GetAsyncKeyState(VK_CONTROL) < 0) or
+    // Ctrl+Shift+click has no Alt: its menu waits for the mouse button only (user, 20 Nov: "try
+    // ^shift-click")
+    if (FAltHeld and ((GetAsyncKeyState(VK_MENU) < 0) or (GetAsyncKeyState(VK_CONTROL) < 0))) or
        (GetAsyncKeyState(VK_LBUTTON) < 0) or (GetAsyncKeyState(VK_RBUTTON) < 0) then
       Exit;                           // still held: look again in 30 ms
     FWait.Enabled := False;
@@ -443,7 +446,8 @@ begin
     var View := Services.GetViewForEditor(Editor);
     if (View = nil) or (View.Buffer = nil) then
       Exit;
-    if Shift * [ssCtrl, ssAlt, ssShift] <> [ssCtrl, ssAlt] then
+    const Mods = Shift * [ssCtrl, ssAlt, ssShift];
+    if (Mods <> [ssCtrl, ssShift]) and (Mods <> [ssCtrl, ssAlt]) then
     begin
       EnsureIndex(View.Buffer.FileName);          // read early, so the first ask is quick
       Exit;
@@ -456,8 +460,9 @@ begin
     P.Col  := Col;
     P.Line := State.LineState[Visible].LogicalLineNum;
     var At := Editor.ClientToScreen(Point(X, Y + 16));
-    Handled := True;
-    FTaken  := True;
+    Handled  := True;               // not the IDE's: no selection extended, no Ctrl+click
+    FTaken   := True;
+    FAltHeld := ssAlt in Mods;
     // after the editor's event returns: a menu inside it would be shown mid-click
     TThread.ForceQueue(nil,
       procedure
@@ -540,7 +545,10 @@ begin
   try
     const View = (BorlandIDEServices as IOTAEditorServices).TopView;
     if View <> nil then
+    begin
+      FAltHeld := False;
       Ask(View, View.CursorPos, CaretPoint(View), akImplementation);
+    end;
   except
   end;
 end;
@@ -550,7 +558,10 @@ begin
   try
     const View = (BorlandIDEServices as IOTAEditorServices).TopView;
     if View <> nil then
+    begin
+      FAltHeld := False;
       Ask(View, View.CursorPos, CaretPoint(View), akDeclaration);
+    end;
   except
   end;
 end;

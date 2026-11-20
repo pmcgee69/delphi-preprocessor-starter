@@ -20,7 +20,7 @@ rules do, as you type, as Zed does.
   isn't needed.
 
 **Go to implementation**, in any Delphi file, `.pas` too: Ctrl+click on `x.DoSomething()` goes to
-the interface; **Ctrl+Alt+click** goes to the classes' methods that implement it, or right-click
+the interface; **Ctrl+Shift+click** (or Ctrl+Alt+click) goes to the classes' methods that implement it, or right-click
 and choose **Go to Implementation**, below Find Declaration. One goes straight there; more show a
 menu to choose from. It reads the active project's units (its folder and its search path) in the
 background: `DelphiPP.GoToImpl.pas`, with the index `..\DelphiPP.Impl.pas` that delphipp's
