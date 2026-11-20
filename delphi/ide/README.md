@@ -34,7 +34,10 @@ a menu to choose from. Beside it on the right-click menu:
   the Messages view; double-click a line to go there. A use counts when its name is declared at
   the same place: `fInspectors` in `Spring.Container.Builder.pas` gives its 6 uses, and
   `fInspectors.Remove` the 44 calls to `ICollection<T>.Remove` across Spring4D. Files open in the
-  editor are read as it has them, saved or not.
+  editor are read as it has them, saved or not. It looks for half a second at a time: if that
+  wasn't enough, the list ends with "... 1239 of 4669 units read", and right-clicking the same
+  name again offers **Find More References (delphipp)**, which adds the next half second's below.
+  Names every unit uses (`Integer`, `string`, `TObject` and the like) aren't looked for.
 
 Each is greyed when there's nothing to go to. Each jump goes in the IDE's history, so its back and
 forward arrows return to where you were. Resting the mouse on a name shows its declaration's line

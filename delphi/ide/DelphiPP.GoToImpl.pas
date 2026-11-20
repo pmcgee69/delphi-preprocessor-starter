@@ -50,6 +50,14 @@ type
     FDeclActions: TActionList;
     FTypeActions: TActionList;
     FRefsActions: TActionList;
+    FRefsAction : TAction;
+    // find references on a budget: where the last stopped, to go on from (the user, 21 Nov: "a
+    // time budget like 0.5sec .. and then just add a list item of '...' to the results")
+    FRefsKey    : string;             // the file and the caret it was asked at
+    FRefsNext   : Integer;            // the unit to go on from; -1 when every one was read
+    FRefsCount  : Integer;            // found so far
+    FRefsFirst  : Integer;            // for Query: the unit to start from
+    FRefsMore   : TRefsMore;          // from Query: how far it went
     FTargets : TArray<TImplTarget>;
     FIndexKey: string;                // what the index was built from: the project and its path
     FTaken   : Boolean;               // a Ctrl+Shift mouse-down taken: its mouse-up too
@@ -85,6 +93,8 @@ type
     procedure OnTypeDefinition(Sender: TObject);
     procedure OnUpdateTypeDefinition(Sender: TObject);
     procedure OnFindReferences(Sender: TObject);
+    procedure OnUpdateReferences(Sender: TObject);
+    function RefsKey(const View: IOTAEditView): string;
     procedure UpdateFor(A: TAction; Kind: TAskKind);
     procedure OnItem(Sender: TObject);
     procedure EnsureIndex(const FileName: string);
@@ -424,7 +434,9 @@ begin
   R.Hint       := 'Every use of this name, from delphipp''s index, in the Messages view';
   R.Category   := RefsCategory;
   R.OnExecute  := OnFindReferences;
-  R.OnUpdate   := OnUpdateDeclaration;  // wherever there is a declaration to find
+  R.OnUpdate   := OnUpdateReferences;
+  FRefsAction  := R;
+  FRefsNext    := -1;
   FHint  := TCodeHint.Create(nil);
   FHover := TTimer.Create(nil);
   FHover.Enabled := False;
@@ -638,12 +650,13 @@ begin
           except
             // that one as saved
           end;
+        // half a second, from FRefsFirst: OnFindReferences goes on from FRefsMore.Next
         Result := References(FileName, Text, CP.Line - 1, Ch, True,
           function(P: string): string
           begin
             if not Open.TryGetValue(P.ToLower, Result) then
               Result := '';
-          end, WaitMs);
+          end, WaitMs, 500, FRefsFirst, FRefsMore);
       finally
         Open.Free;
       end;
@@ -918,8 +931,14 @@ begin
   UpdateFor(Sender as TAction, akTypeDefinition);
 end;
 
-// every use of the name at the caret, in the Messages view: a tab of its own, cleared each time;
-// a double-click on a line opens the file there
+function TGoToImpl.RefsKey(const View: IOTAEditView): string;
+begin
+  Result := Format('%s|%d|%d', [View.Buffer.FileName.ToLower, View.CursorPos.Line, View.CursorPos.Col]);
+end;
+
+// every use of the name at the caret, in the Messages view, a tab of its own: half a second's
+// worth, then a last line saying how far it got; asked again at the same caret (the menu item
+// is then Find More References), the next half second's are added below
 procedure TGoToImpl.OnFindReferences(Sender: TObject);
 begin
   try
@@ -927,6 +946,9 @@ begin
     if (View = nil) or (View.Buffer = nil) then
       Exit;
     EnsureIndex(View.Buffer.FileName);
+    const Key = RefsKey(View);
+    const GoOn = (Key = FRefsKey) and (FRefsNext > 0);
+    FRefsFirst := if GoOn then FRefsNext else 0;
     var Found: TArray<TImplTarget>;
     const Was = Screen.Cursor;
     Screen.Cursor := crHourGlass;
@@ -935,33 +957,54 @@ begin
     finally
       Screen.Cursor := Was;
     end;
+    const More = FRefsMore;
+    FRefsKey  := Key;
+    FRefsNext := More.Next;
     const Messages = BorlandIDEServices as IOTAMessageServices;
     var Group := Messages.GetGroup(RefsGroup);
     if Group = nil then
       Group := Messages.AddMessageGroup(RefsGroup);
-    Messages.ClearMessageGroup(Group);
-    var Units := 0;
-    var Last := '';
-    for var T in Found do
-      if not SameText(T.Path, Last) then
-      begin
-        Inc(Units);
-        Last := T.Path;
-      end;
-    if Found = nil then
-      Messages.AddTitleMessage(Format('No references found (%d units read)', [IndexedCount]), Group)
+    if not GoOn then
+    begin
+      Messages.ClearMessageGroup(Group);
+      FRefsCount := 0;
+    end;
+    Inc(FRefsCount, Length(Found));
+    if More.Common then
+      Messages.AddTitleMessage('A name every unit uses (Integer, string, TObject ...): its uses aren''t listed', Group)
+    else if GoOn then
+      Messages.AddTitleMessage(Format('%d more (%d in all)', [Length(Found), FRefsCount]), Group)
+    else if Found = nil then
+      Messages.AddTitleMessage(Format('No references found (%d units read)', [More.Read]), Group)
     else
-      Messages.AddTitleMessage(Format('%d references in %d units (%d units read)',
-        [Length(Found), Units, IndexedCount]), Group);
+      Messages.AddTitleMessage(Format('%d references', [Length(Found)]), Group);
     for var T in Found do
     begin
       var Ref: Pointer;
       Messages.AddToolMessage(T.Path, T.Name, 'delphipp', T.Line, T.Col + 1, nil, Ref, Group);
     end;
+    if More.Next >= 0 then
+      Messages.AddTitleMessage(Format('... %d of %d units read in half a second: right-click here, ' +
+        'Find More References (delphipp), for the rest', [More.Read, More.Total]), Group);
     Messages.ShowMessageView(Group);
   except
     // the editor goes on whatever happens here
   end;
+end;
+
+// Find More References at the caret where the last stopped short; greyed where there's nothing
+// declared to find
+procedure TGoToImpl.OnUpdateReferences(Sender: TObject);
+begin
+  try
+    const View = (BorlandIDEServices as IOTAEditorServices).TopView;
+    if (View <> nil) and (View.Buffer <> nil) and (FRefsNext > 0) and (RefsKey(View) = FRefsKey) then
+      FRefsAction.Caption := 'Find More References (delphipp)'
+    else
+      FRefsAction.Caption := 'Find References (delphipp)';
+  except
+  end;
+  UpdateFor(Sender as TAction, akDeclaration);
 end;
 
 { Register }

@@ -64,7 +64,26 @@ function TypeDefinitions(const Path, Text: string; Line, Character: Integer;
 // IncludeDeclaration. TextOf gives an editor's text for a file it has open ('' for none: the
 // file as saved); the file at Path is Text
 function References(const Path, Text: string; Line, Character: Integer; IncludeDeclaration: Boolean;
-  const TextOf: TFunc<string, string> = nil; WaitMs: Cardinal = 30000): TArray<TImplTarget>;
+  const TextOf: TFunc<string, string> = nil; WaitMs: Cardinal = 30000): TArray<TImplTarget>; overload;
+
+type
+  // how far a find references went: on a time budget it stops between units, and a call from
+  // Next goes on (the user, 21 Nov: "a time budget like 0.5sec .. and then just add a list item
+  // of '...' to the results, that the user could select to get more results")
+  TRefsMore = record
+    Next: Integer;                    // the First to go on from; -1 when every unit is read
+    Read, Total: Integer;             // units gone through, of all to go through
+    Common: Boolean;                  // a name in every unit (Integer, string, TObject ...): not
+                                      // looked for ("We shouldn't be spending time on Integer or
+                                      // String etc")
+  end;
+
+// the same, on a budget (0: none): the units from First (0: the declaration's unit, then the
+// file at Path, then the rest), stopping once BudgetMs have gone; the declaration itself only
+// when First is 0
+function References(const Path, Text: string; Line, Character: Integer; IncludeDeclaration: Boolean;
+  const TextOf: TFunc<string, string>; WaitMs, BudgetMs: Cardinal; First: Integer;
+  out More: TRefsMore): TArray<TImplTarget>; overload;
 
 // read a file of the index again, in the background: saved (Text '': as on disk), or as an
 // editor has it. Each query does the same for its own file first, so the file you ask from is
@@ -74,7 +93,7 @@ procedure Reindex(const Path: string; const Text: string = '');
 implementation
 
 uses
-  System.Classes, System.IOUtils, System.SyncObjs, System.Generics.Collections, System.Generics.Defaults, System.Hash,
+  System.Classes, System.IOUtils, System.Diagnostics, System.SyncObjs, System.Generics.Collections, System.Generics.Defaults, System.Hash,
   TreeSitter.Api;
 
 type
@@ -1691,8 +1710,35 @@ begin
   Result := 1;
 end;
 
+// the predefined types and a few classes every unit names: their uses are everywhere, and
+// listing them helps no one
+function IsCommon(const Name: string): Boolean;
+const
+  Words: array[0..53] of string = (
+    'integer', 'cardinal', 'shortint', 'smallint', 'longint', 'int64', 'uint64', 'byte', 'word',
+    'longword', 'fixedint', 'fixeduint', 'nativeint', 'nativeuint', 'int8', 'int16', 'int32',
+    'uint8', 'uint16', 'uint32', 'boolean', 'bytebool', 'wordbool', 'longbool', 'char',
+    'ansichar', 'widechar', 'string', 'ansistring', 'widestring', 'unicodestring', 'shortstring',
+    'rawbytestring', 'utf8string', 'pchar', 'pansichar', 'pwidechar', 'pointer', 'single',
+    'double', 'extended', 'real', 'currency', 'comp', 'variant', 'olevariant', 'tobject',
+    'tclass', 'iinterface', 'iunknown', 'exception', 'tdatetime', 'tbytes', 'tarray');
+begin
+  for var W in Words do
+    if W = Name then
+      Exit( True );
+  Result := False;
+end;
+
 function References(const Path, Text: string; Line, Character: Integer; IncludeDeclaration: Boolean;
   const TextOf: TFunc<string, string>; WaitMs: Cardinal): TArray<TImplTarget>;
+begin
+  var More: TRefsMore;
+  Result := References(Path, Text, Line, Character, IncludeDeclaration, TextOf, WaitMs, 0, 0, More);
+end;
+
+function References(const Path, Text: string; Line, Character: Integer; IncludeDeclaration: Boolean;
+  const TextOf: TFunc<string, string>; WaitMs, BudgetMs: Cardinal; First: Integer;
+  out More: TRefsMore): TArray<TImplTarget>;
 var
   Name: string;
   Local: Boolean;
@@ -1701,8 +1747,8 @@ var
   Way: TList<TSNode>;
 
   // every identifier of the name (by its bytes' length first), with the way down to it: one
-  // walk of the file. A query sought each from the root, and tree-sitter finds a node's child i
-  // by counting from the first, so a long routine cost its length again for every use in it
+  // walk of the file. Seeking each from the root, and reading its routine's locals again, cost a
+  // long routine's length for every use in it (cnwizards: 16 s for one name, 3 s since)
   procedure Collect(const Src: TBytesA; const X: TSNode);
   begin
     Way.Add(X);
@@ -1721,10 +1767,13 @@ var
 
 begin
   Result := nil;
+  More := Default(TRefsMore);
+  More.Next := -1;
   if Ready.WaitFor(WaitMs) <> wrSignaled then
     Exit;
   Lock.Enter;
   try
+    const Watch = TStopwatch.StartNew;  // from the index's being ready: its building isn't the budget's
     Refresh(Path, Text);
     var Goal: TImplTarget;
     const Q = TQuery.Create(Path, Text, Line, Character);
@@ -1736,20 +1785,47 @@ begin
     finally
       Q.Free;
     end;
+    Goal.Len := Length(Name);
+    if IsCommon(Name) then
+    begin
+      More.Common := True;
+      if IncludeDeclaration and (First = 0) then
+        Result := [Goal];
+      Exit;
+    end;
     Size := TEncoding.UTF8.GetByteCount(Name);
-    var Files := Paths.ToArray;
-    if Local then
-      Files := [Path]                 // a local or a parameter: its routine's file alone
-    else if FileIndexOf(Path) < 0 then
-      Files := Files + [Path];        // a file outside the index: its own uses
+    // the declaration's unit first, then the one asked from, then the rest in the index's order:
+    // the same each time, so that a call from Next goes on where the last stopped
+    const Files = TList<string>.Create;
+    try
+      if Local then
+        Files.Add(Path)               // a local or a parameter: its routine's file alone
+      else
+      begin
+        Files.Add(Goal.Path);
+        if not SameText(Path, Goal.Path) then
+          Files.Add(Path);            // in the index or not: its own uses
+        for var F in Paths do
+          if not SameText(F, Goal.Path) and not SameText(F, Path) then
+            Files.Add(F);
+      end;
+      More.Total := Files.Count;
+      More.Read := Files.Count;
     var GotGoal := False;
     Hits := TList<TArray<TSNode>>.Create;
     Way := TList<TSNode>.Create;
     try
-      for var F in Files do
+      for var I := (if First > 0 then First else 0) to Files.Count - 1 do
       begin
         if Stopping then
           Break;
+        if (BudgetMs > 0) and (I > First) and (Watch.ElapsedMilliseconds >= BudgetMs) then
+        begin
+          More.Next := I;             // the time's up: the rest another time
+          More.Read := I;
+          Break;
+        end;
+        const F = Files[I];
         var S := '';
         if SameText(F, Path) then
           S := Text
@@ -1829,10 +1905,10 @@ begin
       Way.Free;
       Hits.Free;
     end;
-    if IncludeDeclaration and not GotGoal then
-    begin
-      Goal.Len := Length(Name);
+    if IncludeDeclaration and not GotGoal and (First = 0) then
       Result := [Goal] + Result;      // declared where no identifier of its own shows it
+    finally
+      Files.Free;
     end;
   finally
     Lock.Leave;

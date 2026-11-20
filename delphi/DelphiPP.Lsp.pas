@@ -353,6 +353,11 @@ type
     FActions  : TObjectDictionary<string, TJSONObject>;
     FTexts    : TDictionary<string, string>;   // each open file's newest text, for queries
     FExiting  : Boolean;
+    // the last find references, when it stopped on its budget: asked again at the same place,
+    // it goes on from there and answers all found so far (requests come one at a time)
+    FRefsKey  : string;
+    FRefsSoFar: TArray<TImplTarget>;
+    FRefsNext : Integer;
     function NextByte(out B: Byte): Boolean;
     function ReadLine(out Line: string): Boolean;
     function ReadMessage: TJSONObject;
@@ -677,12 +682,39 @@ begin
       var Decl := False;
       if Params.GetValue('context') is TJSONObject then
         Params.TryGetValue<Boolean>('context.includeDeclaration', Decl);
-      Targets := References(Path, Text, Line, Character, Decl,
+      // half a second at a time (the user, 21 Nov: "a time budget like 0.5sec"); the same
+      // place asked again goes on where it stopped
+      const Key = Format('%s|%d|%d|%s', [Uri, Line, Character, BoolToStr(Decl)]);
+      var First := 0;
+      var SoFar: TArray<TImplTarget> := nil;
+      if (Key = FRefsKey) and (FRefsNext > 0) then
+      begin
+        First := FRefsNext;
+        SoFar := FRefsSoFar;
+      end;
+      var More: TRefsMore;
+      Targets := SoFar + References(Path, Text, Line, Character, Decl,
         function(P: string): string
         begin
           if not Open.TryGetValue(P.ToLower, Result) then
             Result := '';
-        end, 30000);
+        end, 30000, 500, First, More);
+      FRefsKey   := Key;
+      FRefsSoFar := Targets;
+      FRefsNext  := More.Next;
+      var Say := '';
+      if More.Common then
+        Say := 'delphipp: a name every unit uses (Integer, string, TObject ...): its uses aren''t listed'
+      else if More.Next >= 0 then
+        Say := Format('delphipp: %d found so far, %d of %d units read: Find All References again for more',
+          [Length(Targets), More.Read, More.Total]);
+      if Say <> '' then
+      begin
+        var Shown := TJSONObject.Create;
+        Shown.AddPair('type', Num(3));
+        Shown.AddPair('message', Say);
+        Notify('window/showMessage', Shown);
+      end;
     finally
       Open.Free;
     end;
