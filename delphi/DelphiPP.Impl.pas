@@ -1239,8 +1239,10 @@ begin
     T := NodeTarget(Path, Q.Src, R);
 end;
 
-// the cursor on a member's own declaration, in a class's or interface's body: that member
-function DeclaredHere(Q: TQuery; const Path: string; out T: TImplTarget): Boolean;
+// the cursor in a class's or interface's body, not in a routine: the type's name as declared.
+// There a name is first the type's own member: a member's own declaration, a property's
+// `read FService`, a method resolution's `= Run`
+function TypeBody(Q: TQuery; out Name: string): Boolean;
 begin
   for var I := Q.Chain.Count - 1 downto 0 do
   begin
@@ -1252,9 +1254,8 @@ begin
       for var C in Kids(Q.Chain[I]) do
         if (KindOf(C) = 'identifier') or (KindOf(C) = 'genericTpl') then
         begin
-          Result := MemberTarget(Txt(Q.Src, C), Q.Name, T) and SameText(T.Path, Path) and
-                    (T.Line = LineOf(Q.N)) and (T.Col = Integer(ts_node_start_point(Q.N).Column));
-          Exit;
+          Name := Txt(Q.Src, C);
+          Exit( True );
         end;
       Exit( False );
     end;
@@ -1280,21 +1281,26 @@ begin
   end;
   if KindOf(Q.Up) = 'genericDot' then
   begin
-    // TFoo.Bar, as a method's heading writes it: Bar of TFoo (a unit's name before TFoo
-    // isn't a type: the name alone, below)
+    // TFoo.Bar, as a method's heading writes it, or IFoo.Bar in a method resolution clause: Bar
+    // of TFoo (a unit's name before TFoo isn't a type: the name alone, below). The names only:
+    // the dot isn't one (taken for TFoo before, so a heading's Bar was found as a member of the
+    // routine's class, which is the same class, and a clause's not at all)
     var Prev := '';
     for var C in Kids(Q.Up) do
     begin
       if C.id = Q.N.id then
         Break;
-      if KindOf(C) <> '.' then
+      if (KindOf(C) = 'identifier') or (KindOf(C) = 'genericTpl') then
         Prev := Txt(Q.Src, C);
     end;
     if (Prev <> '') and MemberTarget(Prev, Q.Name, T) then
       Exit( True );
   end;
-  Result := DeclaredHere(Q, Path, T) or LocalTarget(Q, Path, T) or MemberTarget(Q.Cls, Q.Name, T) or
-            UnitTarget(Q, Path, T) or NameTarget(Q.Name, T);
+  var Body: string;
+  if TypeBody(Q, Body) and MemberTarget(Body, Q.Name, T) then
+    Exit( True );
+  Result := LocalTarget(Q, Path, T) or MemberTarget(Q.Cls, Q.Name, T) or UnitTarget(Q, Path, T) or
+            NameTarget(Q.Name, T);
 end;
 
 function Definitions(const Path, Text: string; Line, Character: Integer;
