@@ -220,7 +220,8 @@ begin
   Result := ts_node_start_point(N).Row + 1;
 end;
 
-function Key(const S: string): string;
+// a name with no unit and no generic arguments, lower case: a method's, or the base of a type's Key
+function BaseKey(const S: string): string;
 begin
   var T := S.Trim;
   var I := T.IndexOf('<');
@@ -262,9 +263,46 @@ begin
     end;
 end;
 
+// a type as written (IList<IBuilderInspector>, Spring.Collections.ICollection<T>): its name and how
+// many generic arguments, `icollection`1`, as .NET writes it. ICollection and ICollection<T> are
+// two types (Spring.Collections declares both); with one key, the first read stood for both, and
+// IList<T>'s Remove, ICollection<T>'s alone, was found nowhere (user, 20 Nov: "add has
+// implementations ... what about remove?")
+function Key(const S: string): string;
+begin
+  Result := BaseKey(S);
+  const N = Length(Args(S.Trim));
+  if N > 0 then
+    Result := Result + '`' + IntToStr(N);
+end;
+
+// a declaration's type parameters: `<T: class, constructor; TID>` is T and TID (groups by ';',
+// names before a ':', constraints after it)
+function TypeParams(const NameText: string): TArray<string>;
+begin
+  Result := nil;
+  var TP := Full(NameText);
+  if TP.IndexOf('<') < 0 then
+    Exit;
+  TP := TP.Substring(TP.IndexOf('<') + 1).TrimRight(['>']);
+  for var G in TP.Split([';']) do
+    for var Nm in (if G.IndexOf(':') >= 0 then G.Substring(0, G.IndexOf(':')) else G).Split([',']) do
+      if Nm <> '' then
+        Result := Result + [Nm];
+end;
+
+// a declared type's Key: its parameters counted as declared, constraints and all
+function DeclKey(const NameText: string): string;
+begin
+  Result := BaseKey(NameText);
+  const N = Length(TypeParams(NameText));
+  if N > 0 then
+    Result := Result + '`' + IntToStr(N);
+end;
+
 function Norm(const S: string): string;
 begin
-  Result := Key(S);
+  Result := BaseKey(S);
   const A = Args(S);
   if Length(A) > 0 then
   begin
@@ -300,7 +338,7 @@ begin
   P.Line    := LineOf(N);
   P.Col     := ts_node_start_point(N).Column;
   P.Name    := Txt(Src, N);
-  Names.TryAdd(Key(P.Name), P);
+  Names.TryAdd(DeclKey(P.Name), P);
 end;
 
 procedure AddMembers(Info: TTypeInfo; const Src: TBytesA; const N: TSNode);
@@ -378,7 +416,7 @@ begin
   end;
   if IsNull(NameN) or IsNull(Body) then
     Exit;
-  const K = Key(Txt(Src, NameN));
+  const K = DeclKey(Txt(Src, NameN));
   // `IFoo = interface;`, `TFoo = class;`: a forward declaration, no parents and no members; the
   // full one, later, takes its place (until 20 Nov the forward one stayed, and the interface
   // seemed to have no methods)
@@ -394,16 +432,7 @@ begin
   Info.FileIdx := FileIdx;
   Info.Line := LineOf(Decl);
   Info.Col := ts_node_start_point(NameN).Column;
-  // `<T: class, constructor; TID>`: T and TID
-  var TP := Full(Txt(Src, NameN));
-  if TP.IndexOf('<') >= 0 then
-  begin
-    TP := TP.Substring(TP.IndexOf('<') + 1).TrimRight(['>']);
-    for var G in TP.Split([';']) do
-      for var Nm in (if G.IndexOf(':') >= 0 then G.Substring(0, G.IndexOf(':')) else G).Split([',']) do
-        if Nm <> '' then
-          Info.TParams.Add(Nm);
-  end;
+  Info.TParams.AddRange(TypeParams(Txt(Src, NameN)));
   for var C in Kids(Body) do
     if KindOf(C) = 'typeref' then
       Info.Parents.Add(Full(Txt(Src, C)));
@@ -443,7 +472,7 @@ begin
           P.FileIdx := FileIdx;
           P.Line := LineOf(N);
           P.Name := Parts[High(Parts) - 1] + '.' + Parts[High(Parts)];
-          Impls.AddOrSetValue(Key(Parts[High(Parts) - 1]) + '.' + Key(Parts[High(Parts)]), P);
+          Impls.AddOrSetValue(Key(Parts[High(Parts) - 1]) + '.' + BaseKey(Parts[High(Parts)]), P);
         end;
       end
       else
@@ -968,11 +997,38 @@ begin
   Result.Name := Name;
 end;
 
+// a type by a name as written: with its arguments (IList<T>: ilist`1), or bare, as at a cursor on
+// IList in IList<T> (ilist, or failing that the generic one with the fewest parameters)
+function FindType(const Name: string; out Info: TTypeInfo): Boolean;
+begin
+  const K = Key(Name);
+  if Types.TryGetValue(K, Info) then
+    Exit( True );
+  if Name.IndexOf('<') < 0 then
+    for var N := 1 to 4 do
+      if Types.TryGetValue(K + '`' + IntToStr(N), Info) then
+        Exit( True );
+  Result := False;
+end;
+
+// a unit-level name, the same way
+function FindName(const Name: string; out P: TPlace): Boolean;
+begin
+  const K = Key(Name);
+  if Names.TryGetValue(K, P) then
+    Exit( True );
+  if Name.IndexOf('<') < 0 then
+    for var N := 1 to 4 do
+      if Names.TryGetValue(K + '`' + IntToStr(N), P) then
+        Exit( True );
+  Result := False;
+end;
+
 // member M of Ty, or of an ancestor: a class's parent, each of an interface's
 function MemberTarget(const Ty, M: string; out T: TImplTarget; Depth: Integer = 0): Boolean;
 begin
   var Info: TTypeInfo;
-  if (Depth > 32) or (Ty = '') or not Types.TryGetValue(Key(Ty), Info) then
+  if (Depth > 32) or (Ty = '') or not FindType(Ty, Info) then
     Exit( False );
   var P: TPos;
   if Info.Places.TryGetValue(M, P) then
@@ -992,13 +1048,13 @@ end;
 function NameTarget(const Name: string; out T: TImplTarget): Boolean;
 begin
   var Info: TTypeInfo;
-  if Types.TryGetValue(Key(Name), Info) then
+  if FindType(Name, Info) then
   begin
     T := TargetOf(Paths[Info.FileIdx], Info.Line, Info.Col, Info.Name);
     Exit( True );
   end;
   var P: TPlace;
-  if Names.TryGetValue(Key(Name), P) then
+  if FindName(Name, P) then
   begin
     T := TargetOf(Paths[P.FileIdx], P.Line, P.Col, P.Name);
     Exit( True );
@@ -1071,7 +1127,7 @@ function UnitTarget(Q: TQuery; const Path: string; out T: TImplTarget): Boolean;
         for var C in Kids(Z) do
           if (KindOf(C) = 'identifier') or (KindOf(C) = 'genericTpl') then
           begin
-            if Key(Txt(Q.Src, C)) = Q.Name then
+            if BaseKey(Txt(Q.Src, C)) = Q.Name then
               Exit( C );
             Break;
           end;
@@ -1127,7 +1183,8 @@ begin
         // x.M: M of x's type; or of a type named, as TCollections.CreateList
         const L = ts_node_child(Q.Up, 0);
         var Ty := TypeOfExpr(Q.Src, L, Q.Cls, Q.FileIdx, Q.Locals);
-        if (Ty = '') and Types.ContainsKey(Key(Txt(Q.Src, L))) then
+        var Info: TTypeInfo;
+        if (Ty = '') and FindType(Txt(Q.Src, L), Info) then
           Ty := Txt(Q.Src, L);
         if MemberTarget(Ty, Q.Name, T) then
           Result := [T];
@@ -1175,7 +1232,8 @@ begin
       if not Q.Found then
         Exit;
       var Ty := TypeOfExpr(Q.Src, if Q.IsMember then Q.Up else Q.N, Q.Cls, Q.FileIdx, Q.Locals);
-      if (Ty = '') and Types.ContainsKey(Key(Q.Name)) then
+      var Info: TTypeInfo;
+      if (Ty = '') and FindType(Q.Name, Info) then
         Ty := Q.Name;                 // a type's own name
       var T := Default(TImplTarget);
       if (Ty <> '') and NameTarget(Ty, T) then
