@@ -284,8 +284,9 @@ end;
 procedure TGoToImpl.OnWait(Sender: TObject);
 begin
   try
-    if (GetAsyncKeyState(VK_MENU) < 0) or (GetAsyncKeyState(VK_CONTROL) < 0) or
-       (GetAsyncKeyState(VK_LBUTTON) < 0) or (GetAsyncKeyState(VK_RBUTTON) < 0) then
+    // the mouse button only: Alt is disarmed at the click (OnMouseDown), so the menu shows with
+    // the keys still held (user, 20 Nov: "still no popup until release keys")
+    if (GetAsyncKeyState(VK_LBUTTON) < 0) or (GetAsyncKeyState(VK_RBUTTON) < 0) then
       Exit;                           // still held: look again in 30 ms
     FWait.Enabled := False;
     if (Length(FTargets) = 1) and (FNotes = nil) then
@@ -356,10 +357,18 @@ begin
   finally
     Screen.Cursor := Was;
   end;
-  // jump, or show the menu, once the keys and the button are let go (OnWait)
+  // jump, or show the menu, once the mouse button is let go (OnWait)
   FAt    := At;
   FNotes := Notes;
   FWait.Enabled := True;
+end;
+
+// a menu item's text with room after it: the IDE's menus draw larger than they measure, and
+// the end was cut off, even in one piece (user, 20 Nov: "Spring.Container.Buil",
+// "Spring.Collections.Lists.pas 19")
+function Padded(const S: string): string;
+begin
+  Result := S + StringOfChar(' ', Length(S) div 4 + 2);
 end;
 
 procedure TGoToImpl.ShowMenu(const At: TPoint; const Notes: TArray<string>);
@@ -370,21 +379,29 @@ begin
   for var S in Notes do
   begin
     const Item = TMenuItem.Create(FMenu);
-    Item.Caption := S.Replace('&', '&&');
+    Item.Caption := Padded(S.Replace('&', '&&'));
     Item.Tag     := -1;
     FMenu.Items.Add(Item);
   end;
   for var I := 0 to High(FTargets) do
-    begin
-      const Item = TMenuItem.Create(FMenu);
-      // in one piece: after a tab, as a shortcut is, it was cut off (user, 20 Nov: the
-      // declaration's unit shown as "Spring.Container.Build")
-      Item.Caption := (FTargets[I].Name + '  -  ' + ExtractFileName(FTargets[I].Path) + ' ' +
-                       IntToStr(FTargets[I].Line)).Replace('&', '&&');
-      Item.Tag     := I;
-      Item.OnClick := OnItem;
-      FMenu.Items.Add(Item);
-    end;
+  begin
+    const Item = TMenuItem.Create(FMenu);
+    // in one piece: after a tab, as a shortcut is, it was cut off (user, 20 Nov: the
+    // declaration's unit shown as "Spring.Container.Build")
+    Item.Caption := Padded((FTargets[I].Name + '  -  ' + ExtractFileName(FTargets[I].Path) + ' ' +
+                            IntToStr(FTargets[I].Line)).Replace('&', '&&'));
+    Item.Tag     := I;
+    Item.OnClick := OnItem;
+    FMenu.Items.Add(Item);
+  end;
+  // themed as the IDE's own menus, so that it is measured as it is drawn
+  try
+    var Theming: IOTAIDEThemingServices;
+    if Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) and Theming.IDEThemingEnabled then
+      Theming.ApplyTheme(FMenu);
+  except
+    // unthemed
+  end;
   FMenu.Popup(At.X, At.Y);
 end;
 
@@ -424,6 +441,10 @@ begin
     var At := Editor.ClientToScreen(Point(X, Y + 16));
     Handled := True;
     FTaken  := True;
+    // Alt let go with no key pressed since it went down opens the IDE's main menu, closing ours
+    // as it opens: an unassigned key (VK $E8, as AutoHotkey's menu mask) pressed now disarms that
+    keybd_event($E8, 0, 0, 0);
+    keybd_event($E8, 0, KEYEVENTF_KEYUP, 0);
     // after the editor's event returns: a menu inside it would be shown mid-click
     TThread.ForceQueue(nil,
       procedure
