@@ -26,10 +26,10 @@ rem Zed's language server may be running delphipp.exe, which Windows won't let d
 rem but will let us rename: the old one runs on till Zed restarts it, and is deleted next time
 del /q %OUT%\delphipp.old-*.exe 2>nul
 if exist %OUT%\delphipp.exe move /y %OUT%\delphipp.exe %OUT%\delphipp.old-%RANDOM%.exe >nul
-for %%p in (delphipp RunTests) do (
+for %%p in (delphipp RunTests NavSweep) do (
   %DCC% -Q -B -E%OUT% -NU%OUT%\dcu "-NSSystem;Winapi" -UTreeSitter4D\delphi %%p.dpr || exit /b 1
 )
 rem the old one now, unless it is still running
 del /q %OUT%\delphipp.old-*.exe 2>nul
-echo built: %OUT%\delphipp.exe, %OUT%\RunTests.exe
+echo built: %OUT%\delphipp.exe, %OUT%\RunTests.exe, %OUT%\NavSweep.exe
 if defined TEST %OUT%\RunTests.exe

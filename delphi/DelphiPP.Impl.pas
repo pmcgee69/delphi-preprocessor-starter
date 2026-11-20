@@ -1017,12 +1017,17 @@ type
     UnitDone, UnitFound: Boolean;     // UnitTarget's answer for UnitName, kept: the tree is the same
     UnitName: string;
     UnitT: TImplTarget;
+    // find references: each routine's locals once, all its inline vars (not only those before
+    // the name), owned here; nil for a query at a cursor
+    LocalCache: TObjectDictionary<NativeUInt, TDictionary<string, string>>;
     Locals: TLocals;
     FileIdx: Integer;
     constructor Create(const Path, Text: string; Line, Character: Integer);  // parsed, and at Line, Character
     constructor CreateParsed(const Path, Text: string);
     destructor Destroy; override;
     procedure Seek(Line, Col: UInt32);  // to the name at Line, Col (from 0; Col in bytes)
+    procedure SetAt(const Way: TArray<TSNode>);  // to the last of Way, the root first
+    procedure Settle;                 // N and Chain set: Found, Cls, Locals
     function Up: TSNode;              // N's parent
     function IsMember: Boolean;       // N is M in x.M
     function Name: string;            // N's text, lower case
@@ -1052,10 +1057,6 @@ end;
 procedure TQuery.Seek(Line, Col: UInt32);
 begin
   Chain.Clear;
-  for var D in Locals do
-    D.Free;
-  Locals.Clear;
-  Cls := '';
   // down from the root to the identifier under the cursor, keeping the way
   N := ts_tree_root_node(Tree);
   while True do
@@ -1078,6 +1079,24 @@ begin
       Break;
     N := Next;
   end;
+  Settle;
+end;
+
+procedure TQuery.SetAt(const Way: TArray<TSNode>);
+begin
+  Chain.Clear;
+  Chain.AddRange(Way);
+  N := Way[High(Way)];
+  Settle;
+end;
+
+procedure TQuery.Settle;
+begin
+  if LocalCache = nil then
+    for var D in Locals do
+      D.Free;
+  Locals.Clear;
+  Cls := '';
   Found := (KindOf(N) = 'identifier') and (Chain.Count >= 2);
   if not Found then
     Exit;
@@ -1095,16 +1114,32 @@ begin
             Cls := Key(Parts[High(Parts) - 1]);
         end;
       end;
-      const D = TDictionary<string, string>.Create;
-      Locals.Add(D);
-      AddLocals(Src, R, ts_node_start_byte(N), D);
+      if LocalCache <> nil then
+      begin
+        var D: TDictionary<string, string>;
+        if not LocalCache.TryGetValue(NativeUInt(R.Id), D) then
+        begin
+          D := TDictionary<string, string>.Create;
+          AddLocals(Src, R, High(UInt32), D);
+          LocalCache.Add(NativeUInt(R.Id), D);
+        end;
+        Locals.Add(D);
+      end
+      else
+      begin
+        const D = TDictionary<string, string>.Create;
+        Locals.Add(D);
+        AddLocals(Src, R, ts_node_start_byte(N), D);
+      end;
     end;
 end;
 
 destructor TQuery.Destroy;
 begin
-  for var D in Locals do
-    D.Free;
+  if LocalCache = nil then
+    for var D in Locals do
+      D.Free;
+  LocalCache.Free;
   Locals.Free;
   Chain.Free;
   if Tree <> nil then
@@ -1621,27 +1656,67 @@ end;
 
 { find references }
 
+type
+  TMemo = record
+    Got: Boolean;
+    T: TImplTarget;
+  end;
+
+// the name as a whole word in Low (lower case): `add`, not the add of `address`
+function HasWord(const Low, Name: string): Boolean;
+begin
+  var P := Low.IndexOf(Name);
+  while P >= 0 do
+  begin
+    const Before = (P = 0) or not CharInSet(Low.Chars[P - 1], ['a'..'z', '0'..'9', '_']);
+    const E = P + Name.Length;
+    const After = (E >= Low.Length) or not CharInSet(Low.Chars[E], ['a'..'z', '0'..'9', '_']);
+    if Before and After then
+      Exit( True );
+    P := Low.IndexOf(Name, P + 1);
+  end;
+  Result := False;
+end;
+
+// where a name not after a dot means one thing: its innermost routine, anonymous method or type
+// declaration (1: the unit's own level)
+function ScopeOf(Q: TQuery): NativeUInt;
+begin
+  for var I := Q.Chain.Count - 1 downto 0 do
+  begin
+    const K = KindOf(Q.Chain[I]);
+    if (K = 'defProc') or (K = 'lambda') or (K = 'declType') then
+      Exit( NativeUInt(Q.Chain[I].Id) );
+  end;
+  Result := 1;
+end;
+
 function References(const Path, Text: string; Line, Character: Integer; IncludeDeclaration: Boolean;
   const TextOf: TFunc<string, string>; WaitMs: Cardinal): TArray<TImplTarget>;
 var
   Name: string;
   Local: Boolean;
   Size: UInt32;
-  Hits: TList<TSNode>;
+  Hits: TList<TArray<TSNode>>;
+  Way: TList<TSNode>;
 
-  // every identifier of the name, by its bytes' length first
+  // every identifier of the name (by its bytes' length first), with the way down to it: one
+  // walk of the file. A query sought each from the root, and tree-sitter finds a node's child i
+  // by counting from the first, so a long routine cost its length again for every use in it
   procedure Collect(const Src: TBytesA; const X: TSNode);
   begin
+    Way.Add(X);
     const C = ts_node_child_count(X);
     if C = 0 then
     begin
       if (ts_node_end_byte(X) - ts_node_start_byte(X) = Size) and (KindOf(X) = 'identifier') and
          (Txt(Src, X).ToLower = Name) then
-        Hits.Add(X);
-      Exit;
-    end;
-    for var I := 0 to C - 1 do
-      Collect(Src, ts_node_child(X, I));
+        Hits.Add(Way.ToArray);
+    end
+    else
+      for var Z in Kids(X) do
+        Collect(Src, Z);
+    Way.Delete(Way.Count - 1);
   end;
 
 begin
@@ -1668,7 +1743,8 @@ begin
     else if FileIndexOf(Path) < 0 then
       Files := Files + [Path];        // a file outside the index: its own uses
     var GotGoal := False;
-    Hits := TList<TSNode>.Create;
+    Hits := TList<TArray<TSNode>>.Create;
+    Way := TList<TSNode>.Create;
     try
       for var F in Files do
       begin
@@ -1690,19 +1766,44 @@ begin
             Continue;
           end;
         end;
-        if S.ToLower.IndexOf(Name) < 0 then
-          Continue;                   // not even the letters: not parsed
+        if not HasWord(S.ToLower, Name) then
+          Continue;                   // not even the word: not parsed
         const Lines = S.Replace(#13#10, #10).Replace(#13, #10).Split([#10]);
         const R = TQuery.CreateParsed(F, S);
+        R.LocalCache := TObjectDictionary<NativeUInt, TDictionary<string, string>>.Create([doOwnsValues]);
+        // a name not after a dot is the same in its whole routine: asked once there (Spring4D's,
+        // jvcl's `Integer`, `S`, `Text` in every routine: seconds before)
+        const Memo = TDictionary<NativeUInt, TMemo>.Create;
         try
           Hits.Clear;
           Collect(R.Src, ts_tree_root_node(R.Tree));
-          for var X in Hits do
+          for var Hit in Hits do
           begin
+            const X = Hit[High(Hit)];
             const P = ts_node_start_point(X);
-            R.Seek(P.Row, P.Column);
+            R.SetAt(Hit);
             var T: TImplTarget;
-            if not DefinitionAt(R, F, T) or not SameText(T.Path, Goal.Path) or
+            var Got: Boolean;
+            if R.Found and not R.IsMember and (KindOf(R.Up) <> 'genericDot') then
+            begin
+              const K = ScopeOf(R);
+              var M: TMemo;
+              if Memo.TryGetValue(K, M) then
+              begin
+                Got := M.Got;
+                T := M.T;
+              end
+              else
+              begin
+                Got := DefinitionAt(R, F, T);
+                M.Got := Got;
+                M.T := T;
+                Memo.Add(K, M);
+              end;
+            end
+            else
+              Got := DefinitionAt(R, F, T);
+            if not Got or not SameText(T.Path, Goal.Path) or
                (T.Line <> Goal.Line) or (T.Col <> Goal.Col) then
               Continue;
             const IsGoal = SameText(F, Goal.Path) and (Integer(P.Row) + 1 = Goal.Line) and
@@ -1720,10 +1821,12 @@ begin
             Result := Result + [U];
           end;
         finally
+          Memo.Free;
           R.Free;
         end;
       end;
     finally
+      Way.Free;
       Hits.Free;
     end;
     if IncludeDeclaration and not GotGoal then
