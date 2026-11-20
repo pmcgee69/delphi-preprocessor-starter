@@ -288,9 +288,12 @@ end;
 procedure TGoToImpl.OnWait(Sender: TObject);
 begin
   try
-    // the mouse button only: Alt is disarmed at the click (OnMouseDown), so the menu shows with
-    // the keys still held (user, 20 Nov: "still no popup until release keys")
-    if (GetAsyncKeyState(VK_LBUTTON) < 0) or (GetAsyncKeyState(VK_RBUTTON) < 0) then
+    // the keys too: a popup menu open while Alt is pressed or let go is closed by Windows. Shown
+    // with the keys still held (and Alt "disarmed" by a dummy key at the click), it flickered or
+    // seemed not to show at all (user, 20 Nov: "^Alt-click naively seems to do nothing ... but
+    // ^click, followed by ^Alt-click, flickers the same (prob) msg box for an instant")
+    if (GetAsyncKeyState(VK_MENU) < 0) or (GetAsyncKeyState(VK_CONTROL) < 0) or
+       (GetAsyncKeyState(VK_LBUTTON) < 0) or (GetAsyncKeyState(VK_RBUTTON) < 0) then
       Exit;                           // still held: look again in 30 ms
     FWait.Enabled := False;
     if (Length(FTargets) = 1) and (FNotes = nil) then
@@ -371,7 +374,7 @@ begin
   finally
     Screen.Cursor := Was;
   end;
-  // jump, or show the menu, once the mouse button is let go (OnWait)
+  // jump, or show the menu, once the keys and the mouse button are let go (OnWait)
   FAt    := At;
   FNotes := Notes;
   FWait.Enabled := True;
@@ -455,10 +458,6 @@ begin
     var At := Editor.ClientToScreen(Point(X, Y + 16));
     Handled := True;
     FTaken  := True;
-    // Alt let go with no key pressed since it went down opens the IDE's main menu, closing ours
-    // as it opens: an unassigned key (VK $E8, as AutoHotkey's menu mask) pressed now disarms that
-    keybd_event($E8, 0, 0, 0);
-    keybd_event($E8, 0, KEYEVENTF_KEYUP, 0);
     // after the editor's event returns: a menu inside it would be shown mid-click
     TThread.ForceQueue(nil,
       procedure
