@@ -50,7 +50,9 @@ type
     // ghost-like only for a small part of a second, no text visible")
     FWait    : TTimer;
     FAt      : TPoint;
-    FNotes   : TArray<string>;
+    FPrefix  : string;                // before each item's name: 'No implementation: its declaration, '
+    FMessage : string;                // nothing found: said in a hint, not a menu
+    FMessageAt: TPoint;               // the mouse when it was said
     FFromMenu: Boolean;               // asked from the editor's menu: the popup's first item lit
     // the hover: a name's declaration, its line as written, after the mouse rests on it (user,
     // 20 Nov: the IDE's own shows "..." with no project, "it could be showing type there")
@@ -80,7 +82,8 @@ type
     function Query(const View: IOTAEditView; Pos: TOTAEditPos; Kind: TAskKind;
       WaitMs: Cardinal): TArray<TImplTarget>;
     procedure Ask(const View: IOTAEditView; Pos: TOTAEditPos; const At: TPoint; Kind: TAskKind);
-    procedure ShowMenu(const At: TPoint; const Notes: TArray<string>);
+    procedure ShowMenu(const At: TPoint);
+    procedure ShowMessageHint(const At: TPoint; const Text: string);
   protected
     function AllowedEvents: TCodeEditorEvents; override;
   public
@@ -255,10 +258,16 @@ begin
   if View = nil then
     Exit;
   View.Position.Move(Line, Max(Col, 1));
-  View.MoveViewToCursor;
   const At = View.CursorPos;
   View.Center(At.Line, At.Col);
   View.Paint;
+  // the whole editor painted again: after a jump, lines were shown where others are, until each
+  // was clicked (user, 20 Nov: "when you click on lines, they 'reveal' they are actually
+  // different lines than first displayed")
+  try
+    (BorlandIDEServices as INTACodeEditorServices).InvalidateTopEditor;
+  except
+  end;
 end;
 
 { the IDE's back and forward arrows (user, 20 Nov: "can we also get the back and forward arrows in
@@ -297,10 +306,18 @@ end;
 
 procedure THistoryPlace.Execute;
 begin
-  try
-    ShowPlace(FPath, FLine, FCol);
-  except
-  end;
+  // after the IDE's back or forward menu has gone, as a menu item's jump (OnItem)
+  const Path = FPath;
+  const Line = FLine;
+  const Col  = FCol;
+  TThread.ForceQueue(nil,
+    procedure
+    begin
+      try
+        ShowPlace(Path, Line, Col);
+      except
+      end;
+    end);
 end;
 
 function THistoryPlace.GetItemCaption: string;
@@ -412,10 +429,12 @@ begin
        (GetAsyncKeyState(VK_LBUTTON) < 0) or (GetAsyncKeyState(VK_RBUTTON) < 0) then
       Exit;                           // still held: look again in 30 ms
     FWait.Enabled := False;
-    if (Length(FTargets) = 1) and (FNotes = nil) then
+    if FTargets = nil then
+      ShowMessageHint(FAt, FMessage)
+    else if (Length(FTargets) = 1) and (FPrefix = '') then
       GoToTarget(FTargets[0])
     else
-      ShowMenu(FAt, FNotes);
+      ShowMenu(FAt);
   except
     FWait.Enabled := False;
   end;
@@ -457,6 +476,9 @@ begin
     const Line = State.LineState[Visible].LogicalLineNum;
     if (FHintText <> '') and (Line = FSpanLine) and (Col >= FSpan1) and (Col < FSpan2) then
       Exit;                           // still over the name its hint is for
+    if (FHintText <> '') and (FSpanLine = -1) and
+       (Abs(Mouse.CursorPos.X - FMessageAt.X) + Abs(Mouse.CursorPos.Y - FMessageAt.Y) < 6) then
+      Exit;                           // a message by the cursor: until the mouse really moves
     HideHover;
     if Shift * [ssCtrl, ssAlt, ssShift] <> [] then
       Exit;                           // a Ctrl+click, the IDE's underline: no hint over it
@@ -583,7 +605,8 @@ begin
   if (View = nil) or (View.Buffer = nil) then
     Exit;
   EnsureIndex(View.Buffer.FileName);
-  var Notes: TArray<string> := nil;
+  FPrefix  := '';
+  FMessage := '';
   const Was = Screen.Cursor;
   Screen.Cursor := crHourGlass;
   try
@@ -592,23 +615,42 @@ begin
     if FTargets = nil then
     begin
       if Kind = akDeclaration then
-        Notes := [Format('No declaration found (%d units read)', [IndexedCount])]
+        FMessage := Format('No declaration found (%d units read)', [IndexedCount])
       else
       begin
-        // not a method called through an interface, or none implements it: its declaration
+        // not a method called through an interface, or none implements it: its declaration, as
+        // one item that says so (two lines of notes above it lit up and did nothing: user,
+        // 20 Nov, "the first 2 lines do nothing but stil highlight")
         FTargets := Query(View, Pos, akDeclaration, 0);
-        Notes := [Format('No implementation found (%d units read)', [IndexedCount])];
         if FTargets <> nil then
-          Notes := Notes + ['Its declaration:'];
+          FPrefix := 'No implementation: its declaration, '
+        else
+          FMessage := Format('No implementation or declaration found (%d units read)', [IndexedCount]);
       end;
     end;
   finally
     Screen.Cursor := Was;
   end;
   // jump, or show the menu, once the keys and the mouse button are let go (OnWait)
-  FAt    := At;
-  FNotes := Notes;
+  FAt := At;
   FWait.Enabled := True;
+end;
+
+// nothing to go to: said in a hint by the cursor, not a menu with nothing in it
+procedure TGoToImpl.ShowMessageHint(const At: TPoint; const Text: string);
+begin
+  HideHover;
+  if Text = '' then
+    Exit;
+  var R := FHint.CalcHintRect(Screen.Width div 2, Text, nil);
+  R.Offset(At.X, At.Y);
+  FHint.ActivateHint(R, Text);
+  FHintText := Text;
+  FSpanLine := -1;                    // no name: the mouse moving away hides it
+  FMessageAt := Mouse.CursorPos;
+  FHoverEd := FindVCLWindow(FMessageAt);
+  FHover.Interval := 250;
+  FHover.Enabled  := True;
 end;
 
 // a menu item's text with room after it: the IDE's menus draw larger than they measure, and
@@ -619,25 +661,16 @@ begin
   Result := S + StringOfChar(' ', Length(S) div 4 + 2);
 end;
 
-procedure TGoToImpl.ShowMenu(const At: TPoint; const Notes: TArray<string>);
+procedure TGoToImpl.ShowMenu(const At: TPoint);
 begin
   FMenu.Items.Clear;
-  // a note is an item that does nothing: enabled, so it reads as text, not greyed (user, 20 Nov:
-  // "text could be white")
-  for var S in Notes do
-  begin
-    const Item = TMenuItem.Create(FMenu);
-    Item.Caption := Padded(S.Replace('&', '&&'));
-    Item.Tag     := -1;
-    FMenu.Items.Add(Item);
-  end;
   for var I := 0 to High(FTargets) do
   begin
     const Item = TMenuItem.Create(FMenu);
     // in one piece: after a tab, as a shortcut is, it was cut off (user, 20 Nov: the
     // declaration's unit shown as "Spring.Container.Build")
-    Item.Caption := Padded((FTargets[I].Name + '  -  ' + ExtractFileName(FTargets[I].Path) + ' ' +
-                            IntToStr(FTargets[I].Line)).Replace('&', '&&'));
+    Item.Caption := Padded((FPrefix + FTargets[I].Name + '  -  ' + ExtractFileName(FTargets[I].Path) +
+                            ' ' + IntToStr(FTargets[I].Line)).Replace('&', '&&'));
     Item.Tag     := I;
     Item.OnClick := OnItem;
     FMenu.Items.Add(Item);
@@ -662,8 +695,19 @@ procedure TGoToImpl.OnItem(Sender: TObject);
 begin
   try
     const I = (Sender as TMenuItem).Tag;
-    if (I >= 0) and (I <= High(FTargets)) then
-      GoToTarget(FTargets[I]);
+    if (I < 0) or (I > High(FTargets)) then
+      Exit;
+    // after the menu has gone: it puts back what was under it as it closes, over the editor
+    // that has scrolled meanwhile (user, 20 Nov: "wtf line numbers?????", the same lines twice)
+    var T := FTargets[I];
+    TThread.ForceQueue(nil,
+      procedure
+      begin
+        try
+          GoToTarget(T);
+        except
+        end;
+      end);
   except
   end;
 end;
