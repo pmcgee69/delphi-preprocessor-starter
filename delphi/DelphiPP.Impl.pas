@@ -888,8 +888,8 @@ procedure AddLocals(const Src: TBytesA; const Def: TSNode; Before: UInt32; D: TD
     for var Z in Kids(N) do
     begin
       const K = KindOf(Z);
-      if K = 'defProc' then
-        Continue;                     // a nested routine's own
+      if (K = 'defProc') or (K = 'lambda') then
+        Continue;                     // a nested routine's own, an anonymous method's
       if (K = 'declArg') or (K = 'declVar') or (K = 'declConst') then
         AddDecl(Src, Z, D)
       else if (K = 'varAssignDef') and (ts_node_start_byte(Z) < Before) then
@@ -1013,6 +1013,10 @@ type
     N: TSNode;
     Found: Boolean;                   // N is an identifier
     Cls: string;                      // the class of the method around the cursor, by Key
+    WasLocal: Boolean;                // the last definition found: a routine's local or parameter
+    UnitDone, UnitFound: Boolean;     // UnitTarget's answer for UnitName, kept: the tree is the same
+    UnitName: string;
+    UnitT: TImplTarget;
     Locals: TLocals;
     FileIdx: Integer;
     constructor Create(const Path, Text: string; Line, Character: Integer);  // parsed, and at Line, Character
@@ -1078,7 +1082,7 @@ begin
   if not Found then
     Exit;
   for var R in Chain do
-    if KindOf(R) = 'defProc' then
+    if (KindOf(R) = 'defProc') or (KindOf(R) = 'lambda') then
     begin
       const H = FirstOf(R, 'declProc');
       if not IsNull(H) then
@@ -1220,8 +1224,8 @@ var
       if Got then
         Exit;
       const K = KindOf(Z);
-      if K = 'defProc' then
-        Continue;                     // a nested routine's own
+      if (K = 'defProc') or (K = 'lambda') then
+        Continue;                     // a nested routine's own, an anonymous method's
       if (K = 'declArg') or (K = 'declVar') or (K = 'declConst') or
          ((K = 'varAssignDef') and (ts_node_start_byte(Z) < ts_node_start_byte(Q.N))) then
       begin
@@ -1241,7 +1245,7 @@ var
 begin
   Got := False;
   for var I := Q.Chain.Count - 1 downto 0 do
-    if KindOf(Q.Chain[I]) = 'defProc' then
+    if (KindOf(Q.Chain[I]) = 'defProc') or (KindOf(Q.Chain[I]) = 'lambda') then
     begin
       Walk(Q.Chain[I]);
       if Got then
@@ -1249,7 +1253,23 @@ begin
     end;
   if Got then
     T := NodeTarget(Path, Q.Src, Hit);
+  Q.WasLocal := Got;
   Result := Got;
+end;
+
+// the cursor's innermost routine is an anonymous method: there `Result` is its own, declared
+// nowhere (not the outer function's `result` variable, as Spring4D's tests have)
+function InLambda(Q: TQuery): Boolean;
+begin
+  for var I := Q.Chain.Count - 1 downto 0 do
+  begin
+    const K = KindOf(Q.Chain[I]);
+    if K = 'lambda' then
+      Exit( True );
+    if K = 'defProc' then
+      Exit( False );
+  end;
+  Result := False;
 end;
 
 // a type, routine, var or const the open file declares, outside routines and types: the
@@ -1298,10 +1318,19 @@ function UnitTarget(Q: TQuery; const Path: string; out T: TImplTarget): Boolean;
   end;
 
 begin
+  if Q.UnitDone and (Q.UnitName = Q.Name) then
+  begin
+    T := Q.UnitT;
+    Exit( Q.UnitFound );              // find references: every use of the name in this file
+  end;
   const R = Find(ts_tree_root_node(Q.Tree));
   Result := not IsNull(R);
   if Result then
     T := NodeTarget(Path, Q.Src, R);
+  Q.UnitDone  := True;
+  Q.UnitName  := Q.Name;
+  Q.UnitFound := Result;
+  Q.UnitT     := T;
 end;
 
 // the cursor in a class's or interface's body, not in a routine: the type's name as declared.
@@ -1332,6 +1361,7 @@ end;
 function DefinitionAt(Q: TQuery; const Path: string; out T: TImplTarget): Boolean;
 begin
   T := Default(TImplTarget);
+  Q.WasLocal := False;
   if not Q.Found then
     Exit( False );
   if Q.IsMember then
@@ -1364,6 +1394,8 @@ begin
   var Body: string;
   if TypeBody(Q, Body) and MemberTarget(Body, Q.Name, T) then
     Exit( True );
+  if (Q.Name = 'result') and InLambda(Q) then
+    Exit( False );
   Result := LocalTarget(Q, Path, T) or MemberTarget(Q.Cls, Q.Name, T) or UnitTarget(Q, Path, T) or
             NameTarget(Q.Name, T);
 end;
@@ -1593,6 +1625,7 @@ function References(const Path, Text: string; Line, Character: Integer; IncludeD
   const TextOf: TFunc<string, string>; WaitMs: Cardinal): TArray<TImplTarget>;
 var
   Name: string;
+  Local: Boolean;
   Size: UInt32;
   Hits: TList<TSNode>;
 
@@ -1624,12 +1657,15 @@ begin
       if not DefinitionAt(Q, Path, Goal) then
         Exit;
       Name := Q.Name;
+      Local := Q.WasLocal;
     finally
       Q.Free;
     end;
     Size := TEncoding.UTF8.GetByteCount(Name);
     var Files := Paths.ToArray;
-    if FileIndexOf(Path) < 0 then
+    if Local then
+      Files := [Path]                 // a local or a parameter: its routine's file alone
+    else if FileIndexOf(Path) < 0 then
       Files := Files + [Path];        // a file outside the index: its own uses
     var GotGoal := False;
     Hits := TList<TSNode>.Create;
