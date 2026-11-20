@@ -18,13 +18,25 @@ unit DelphiPP.IDE;
 
 interface
 
+uses
+  System.Types, System.Classes, Vcl.Controls;
+
+type
+  // a hint in a fixed-width font, as it shows code: THintWindow.CalcHintRect sets the
+  // hint font back each time (user, 7 Nov, the first hover: proportional, ragged indents).
+  // The rules' hovers, and go to implementation's (DelphiPP.GoToImpl)
+  TCodeHint = class(THintWindow)
+  public
+    function CalcHintRect(MaxWidth: Integer; const AHint: string; AData: TCustomData): TRect; override;
+  end;
+
 procedure Register;
 
 implementation
 
 uses
-  Winapi.Windows, System.SysUtils, System.Types, System.Classes, System.Math, System.Generics.Collections,
-  Vcl.Controls, Vcl.Graphics, Vcl.Forms, Vcl.ExtCtrls,
+  Winapi.Windows, System.SysUtils, System.Math, System.Generics.Collections,
+  Vcl.Graphics, Vcl.Forms, Vcl.ExtCtrls,
   ToolsAPI, ToolsAPI.Editor,
   DelphiPP.Marks;
 
@@ -35,12 +47,6 @@ const
   HintColor    = TColor($A0A0A0);   // grey
 
 type
-  // a hint in a fixed-width font, as it shows code: THintWindow.CalcHintRect sets the
-  // hint font back each time (user, 7 Nov, the first hover: proportional, ragged indents)
-  TCodeHint = class(THintWindow)
-  public
-    function CalcHintRect(MaxWidth: Integer; const AHint: string; AData: TCustomData): TRect; override;
-  end;
 
   TRulesNotifier = class(TNTACodeEditorNotifier)
   private

@@ -23,10 +23,11 @@ procedure Register;
 implementation
 
 uses
-  Winapi.Windows, System.SysUtils, System.Classes, System.Types, System.Math, System.IOUtils,
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Classes, System.Types, System.Math,
+  System.IOUtils, System.Generics.Collections,
   Vcl.Controls, Vcl.Menus, Vcl.ActnList, Vcl.Forms, Vcl.ExtCtrls,
   ToolsAPI, ToolsAPI.Editor, DCCStrs,
-  DelphiPP.Impl;
+  DelphiPP.Impl, DelphiPP.IDE;
 
 const
   MenuCategory = 'DelphiPP.GoToImplementation';
@@ -50,7 +51,21 @@ type
     FWait    : TTimer;
     FAt      : TPoint;
     FNotes   : TArray<string>;
+    FFromMenu: Boolean;               // asked from the editor's menu: the popup's first item lit
+    // the hover: a name's declaration, its line as written, after the mouse rests on it (user,
+    // 20 Nov: the IDE's own shows "..." with no project, "it could be showing type there")
+    FHint      : TCodeHint;
+    FHintText  : string;              // shown, '' when hidden
+    FHover     : TTimer;              // the rest before asking; then, the mouse leaving
+    FHoverEd   : TWinControl;
+    FHoverPos  : TOTAEditPos;
+    FHoverAt   : TPoint;              // on the screen, below the pointer
+    FSpanLine, FSpan1, FSpan2: Integer; // the name the hint is for: its line, its columns
     procedure OnWait(Sender: TObject);
+    procedure OnMouseMove(const Editor: TWinControl; Shift: TShiftState; X, Y: Integer);
+    procedure OnKeyDown(const Editor: TWinControl; Key: Word; Shift: TShiftState; var Handled: Boolean);
+    procedure OnHover(Sender: TObject);
+    procedure HideHover;
     procedure OnMouseDown(const Editor: TWinControl; Button: TMouseButton; Shift: TShiftState;
       X, Y: Integer; var Handled: Boolean);
     procedure OnMouseUp(const Editor: TWinControl; Button: TMouseButton; Shift: TShiftState;
@@ -228,19 +243,109 @@ begin
   Result := string.Join(';', Deep) + '|' + string.Join(';', Flat);
 end;
 
-procedure GoToTarget(const T: TImplTarget);
+// a file's line (from 1) and column (from 1), shown in the middle of its editor. Position counts
+// the file's own lines; CursorPos, used before, landed a few lines off, differently each time
+// (user, 20 Nov: TSortedList<T>.Add at 1758 landed "1760 ... repeat same -> 1755"): folded
+// regions, it seems
+procedure ShowPlace(const Path: string; Line, Col: Integer);
 begin
-  if not (BorlandIDEServices as IOTAActionServices).OpenFile(T.Path) then
+  if not (BorlandIDEServices as IOTAActionServices).OpenFile(Path) then
     Exit;
   const View = (BorlandIDEServices as IOTAEditorServices).TopView;
   if View = nil then
     Exit;
-  var P: TOTAEditPos;
-  P.Col  := T.Col + 1;
-  P.Line := T.Line;
-  View.CursorPos := P;
-  View.Center(T.Line, P.Col);
+  View.Position.Move(Line, Max(Col, 1));
+  View.MoveViewToCursor;
+  const At = View.CursorPos;
+  View.Center(At.Line, At.Col);
   View.Paint;
+end;
+
+{ the IDE's back and forward arrows (user, 20 Nov: "can we also get the back and forward arrows in
+  the ide (like a browser) working for gotodef, and back to where you started?") }
+
+type
+  IDelphiPPPlace = interface
+    ['{6F3B2A14-8C55-4E0B-9D7A-1C2E4B5A6D70}']
+    function PlaceKey: string;
+  end;
+
+  THistoryPlace = class(TNotifierObject, IOTAHistoryItem, IDelphiPPPlace)
+  private
+    FPath: string;
+    FLine, FCol: Integer;
+  public
+    constructor Create(const Path: string; Line, Col: Integer);
+    procedure Execute;
+    function GetItemCaption: string;
+    function IsEqual(const Item: IOTAHistoryItem): Boolean;
+    function PlaceKey: string;
+  end;
+
+var
+  // ours in the IDE's history: taken back out when the package unloads, so the IDE never
+  // holds an object whose code has gone
+  Places: TList<IOTAHistoryItem>;
+
+constructor THistoryPlace.Create(const Path: string; Line, Col: Integer);
+begin
+  inherited Create;
+  FPath := Path;
+  FLine := Line;
+  FCol  := Col;
+end;
+
+procedure THistoryPlace.Execute;
+begin
+  try
+    ShowPlace(FPath, FLine, FCol);
+  except
+  end;
+end;
+
+function THistoryPlace.GetItemCaption: string;
+begin
+  Result := ExtractFileName(FPath) + ' ' + IntToStr(FLine);
+end;
+
+function THistoryPlace.IsEqual(const Item: IOTAHistoryItem): Boolean;
+begin
+  var P: IDelphiPPPlace;
+  Result := Supports(Item, IDelphiPPPlace, P) and (P.PlaceKey = PlaceKey);
+end;
+
+function THistoryPlace.PlaceKey: string;
+begin
+  Result := FPath.ToLower + '|' + IntToStr(FLine);
+end;
+
+// jump to T, the place left and the place reached put in the IDE's history
+procedure GoToTarget(const T: TImplTarget);
+begin
+  var Here: IOTAHistoryItem := nil;
+  const View = (BorlandIDEServices as IOTAEditorServices).TopView;
+  if (View <> nil) and (View.Buffer <> nil) then
+    Here := THistoryPlace.Create(View.Buffer.FileName, View.Position.Row, View.Position.Column);
+  const There: IOTAHistoryItem = THistoryPlace.Create(T.Path, T.Line, T.Col + 1);
+  ShowPlace(T.Path, T.Line, T.Col + 1);
+  try
+    var History: IOTAHistoryServices;
+    if not Supports(BorlandIDEServices, IOTAHistoryServices, History) then
+      Exit;
+    if Here = nil then
+      Here := There;
+    History.AddHistoryItem(Here, There);
+    Places.Add(Here);
+    Places.Add(There);
+    // a long session: the oldest out, from the IDE's history too
+    while Places.Count > 400 do
+    begin
+      History.RemoveHistoryItem(Places[0]);
+      Places.Delete(0);
+    end;
+  except
+    // the jump without the history
+  end;
 end;
 
 { TGoToImpl }
@@ -273,12 +378,20 @@ begin
   D.Category   := DeclCategory;
   D.OnExecute  := OnFindDeclaration;
   D.OnUpdate   := OnUpdateDeclaration;
+  FHint  := TCodeHint.Create(nil);
+  FHover := TTimer.Create(nil);
+  FHover.Enabled := False;
+  FHover.OnTimer := OnHover;
   OnEditorMouseDownEx := OnMouseDown;
   OnEditorMouseUpEx   := OnMouseUp;
+  OnEditorMouseMove   := OnMouseMove;
+  OnEditorKeyDown     := OnKeyDown;
 end;
 
 destructor TGoToImpl.Destroy;
 begin
+  FHover.Free;
+  FHint.Free;
   FWait.Free;
   FDeclActions.Free;
   FActions.Free;
@@ -310,7 +423,122 @@ end;
 
 function TGoToImpl.AllowedEvents: TCodeEditorEvents;
 begin
-  Exit( [cevMouseEvents] );
+  Exit( [cevMouseEvents, cevKeyboardEvents] );
+end;
+
+procedure TGoToImpl.HideHover;
+begin
+  FHover.Enabled := False;
+  if FHintText <> '' then
+  begin
+    FHint.ReleaseHandle;
+    FHintText := '';
+  end;
+end;
+
+procedure TGoToImpl.OnMouseMove(const Editor: TWinControl; Shift: TShiftState; X, Y: Integer);
+begin
+  try
+    const Services = BorlandIDEServices as INTACodeEditorServices;
+    const View = Services.GetViewForEditor(Editor);
+    if (View = nil) or (View.Buffer = nil) then
+      Exit;
+    // a .dpps file has the rules' hovers (DelphiPP.IDE): not two hints at once
+    const Low = View.Buffer.FileName.ToLower;
+    if Low.EndsWith('.dpps') or Low.EndsWith('.dpps.pas') then
+      Exit;
+    const State = Services.EditorState[Editor];
+    var Col, Visible: Integer;
+    if not State.PointToCharacterPos(Point(X, Y), Col, Visible) then
+    begin
+      HideHover;
+      Exit;
+    end;
+    const Line = State.LineState[Visible].LogicalLineNum;
+    if (FHintText <> '') and (Line = FSpanLine) and (Col >= FSpan1) and (Col < FSpan2) then
+      Exit;                           // still over the name its hint is for
+    HideHover;
+    if Shift * [ssCtrl, ssAlt, ssShift] <> [] then
+      Exit;                           // a Ctrl+click, the IDE's underline: no hint over it
+    FHoverEd := Editor;
+    FHoverPos.Col  := Col;
+    FHoverPos.Line := Line;
+    FHoverAt := Editor.ClientToScreen(Point(X, Y + 20));
+    // the name under the pointer, in the editor's columns: identifier characters either side
+    const Text = State.LineState[Visible].Text;
+    var A := Col;
+    var B := Col;
+    while (A > 1) and (A - 1 <= Text.Length) and CharInSet(Text[A - 1], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+      Dec(A);
+    while (B <= Text.Length) and CharInSet(Text[B], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+      Inc(B);
+    if B = A then
+      Exit;                           // not over a name
+    FSpanLine := Line;
+    FSpan1 := A;
+    FSpan2 := B;
+    FHover.Interval := 600;
+    FHover.Enabled  := True;
+  except
+    // the editor goes on whatever happens here
+  end;
+end;
+
+procedure TGoToImpl.OnKeyDown(const Editor: TWinControl; Key: Word; Shift: TShiftState;
+  var Handled: Boolean);
+begin
+  HideHover;
+end;
+
+// the declaration's line as written, and where it is: from the editor's text for the open file
+function DeclarationHint(const T: TImplTarget; const View: IOTAEditView): string;
+begin
+  Result := '';
+  var Text: string;
+  if SameText(T.Path, View.Buffer.FileName) then
+    Text := TEncoding.UTF8.GetString(BufferText(View.Buffer))
+  else
+    Text := TFile.ReadAllText(T.Path);
+  const Lines = Text.Replace(#13#10, #10).Replace(#13, #10).Split([#10]);
+  if (T.Line < 1) or (T.Line > Length(Lines)) then
+    Exit;
+  Result := Lines[T.Line - 1].Trim + sLineBreak +
+            T.Name + '  -  ' + ExtractFileName(T.Path) + ' ' + IntToStr(T.Line);
+end;
+
+procedure TGoToImpl.OnHover(Sender: TObject);
+begin
+  try
+    if FHintText <> '' then
+    begin
+      // shown: watching for the mouse leaving the editor
+      if FindVCLWindow(Mouse.CursorPos) <> FHoverEd then
+        HideHover;
+      Exit;
+    end;
+    FHover.Enabled := False;
+    if FindVCLWindow(Mouse.CursorPos) <> FHoverEd then
+      Exit;
+    if IndexedCount = 0 then
+      Exit;                           // still reading the units: nothing to say yet, no waiting
+    const View = (BorlandIDEServices as INTACodeEditorServices).GetViewForEditor(FHoverEd);
+    if (View = nil) or (View.Buffer = nil) then
+      Exit;
+    const Found = Query(View, FHoverPos, akDeclaration, 0);
+    if Length(Found) <> 1 then
+      Exit;
+    const Text = DeclarationHint(Found[0], View);
+    if Text = '' then
+      Exit;
+    var R := FHint.CalcHintRect(Screen.Width div 2, Text, nil);
+    R.Offset(FHoverAt.X, FHoverAt.Y);
+    FHint.ActivateHint(R, Text);
+    FHintText := Text;
+    FHover.Interval := 250;
+    FHover.Enabled  := True;
+  except
+    HideHover;
+  end;
 end;
 
 procedure TGoToImpl.EnsureIndex(const FileName: string);
@@ -422,6 +650,11 @@ begin
   except
     // unthemed
   end;
+  // from the editor's menu, the mouse is over the popup but lights nothing (user, 20 Nov: "line 3
+  // isn't highlighted until you then move"): the first item lit, for the arrows and Enter
+  if FFromMenu then
+    PostMessage(PopupList.Window, WM_KEYDOWN, VK_DOWN, 0);
+  HideHover;
   FMenu.Popup(At.X, At.Y);
 end;
 
@@ -440,6 +673,8 @@ procedure TGoToImpl.OnMouseDown(const Editor: TWinControl; Button: TMouseButton;
 begin
   try
     FTaken := False;
+    FFromMenu := False;
+    HideHover;
     if Button <> mbLeft then
       Exit;
     const Services = BorlandIDEServices as INTACodeEditorServices;
@@ -547,6 +782,7 @@ begin
     if View <> nil then
     begin
       FAltHeld := False;
+      FFromMenu := True;
       Ask(View, View.CursorPos, CaretPoint(View), akImplementation);
     end;
   except
@@ -560,6 +796,7 @@ begin
     if View <> nil then
     begin
       FAltHeld := False;
+      FFromMenu := True;
       Ask(View, View.CursorPos, CaretPoint(View), akDeclaration);
     end;
   except
@@ -584,8 +821,18 @@ begin
 end;
 
 initialization
+  Places := TList<IOTAHistoryItem>.Create;
 
 finalization
+  // our places out of the IDE's history first: its back arrow mustn't call code that's gone
+  try
+    var History: IOTAHistoryServices;
+    if Supports(BorlandIDEServices, IOTAHistoryServices, History) then
+      for var P in Places do
+        History.RemoveHistoryItem(P);
+  except
+  end;
+  Places.Free;
   // the package unloaded: the menu's actions and the notifier go before the index does
   if MenuAdded then
   try
