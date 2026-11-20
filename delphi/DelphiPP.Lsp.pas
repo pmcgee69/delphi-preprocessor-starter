@@ -7,6 +7,9 @@ unit DelphiPP.Lsp;
   text in the message, and a code action applies a rule's rewrites to the file. Nothing is
   changed until you ask. JSON-RPC over stdin and stdout.
 
+  Go to implementation (textDocument/implementation): on a call on an interface, x.DoSomething,
+  every class's method that implements it, across the workspace's units (DelphiPP.Impl).
+
   Two threads, as in Python: this one reads the editor's messages; a worker runs the rules on a
   file once its edits have paused, newest text only. Positions are LSP's: lines, and columns in
   UTF-16 units, which is what a Delphi string counts. }
@@ -19,9 +22,9 @@ procedure Serve;
 implementation
 
 uses
-  Winapi.Windows, System.SysUtils, System.Classes, System.Math, System.Character,
+  Winapi.Windows, System.SysUtils, System.Classes, System.Math, System.Character, System.IOUtils,
   System.JSON, System.SyncObjs, System.Generics.Collections, System.Generics.Defaults,
-  DelphiPP.Engine, DelphiPP.Rules, DelphiPP.Hover;
+  DelphiPP.Engine, DelphiPP.Rules, DelphiPP.Hover, DelphiPP.Impl;
 
 const
   Pause = 200;    // milliseconds after the last edit before running the rules
@@ -309,6 +312,23 @@ begin
   end;
 end;
 
+// D:\a b\X.pas -> file:///D:/a%20b/X.pas; \\server\share\X.pas -> file://server/share/X.pas
+function UriOf(const Path: string): string;
+begin
+  var S := Path.Replace('\', '/');
+  var Prefix := 'file:///';
+  if S.StartsWith('//') then
+  begin
+    Prefix := 'file:';
+  end;
+  Result := Prefix;
+  for var B in TEncoding.UTF8.GetBytes(S) do
+    if CharInSet(Char(B), ['A'..'Z', 'a'..'z', '0'..'9', '-', '.', '_', '~', '/', ':']) then
+      Result := Result + Char(B)
+    else
+      Result := Result + '%' + IntToHex(B, 2);
+end;
+
 { The protocol: Content-Length framed JSON on the standard handles }
 
 type
@@ -327,6 +347,7 @@ type
     FWake     : TEvent;
     FPending  : TDictionary<string, TPending>;
     FActions  : TObjectDictionary<string, TJSONObject>;
+    FTexts    : TDictionary<string, string>;   // each open file's newest text, for queries
     FExiting  : Boolean;
     function NextByte(out B: Byte): Boolean;
     function ReadLine(out Line: string): Boolean;
@@ -337,6 +358,7 @@ type
     procedure Want(const Uri, Text: string);
     procedure Work;
     function CodeActions(const Uri: string): TJSONArray;
+    function ImplementationsAt(Params: TJSONObject): TJSONArray;
     procedure Handle(Msg: TJSONObject);
   public
     constructor Create;
@@ -352,6 +374,7 @@ begin
   FWake      := TEvent.Create(nil, False, False, '');    // auto-reset: a wake is never lost
   FPending   := TDictionary<string, TPending>.Create;
   FActions   := TObjectDictionary<string, TJSONObject>.Create([doOwnsValues]);
+  FTexts     := TDictionary<string, string>.Create;
 end;
 
 function TServer.NextByte(out B: Byte): Boolean;
@@ -469,6 +492,7 @@ begin
   FLock.Enter;
   try
     FPending.AddOrSetValue(Uri, P);
+    FTexts.AddOrSetValue(Uri, Text);
   finally
     FLock.Leave;
   end;
@@ -608,6 +632,39 @@ begin
   end;
 end;
 
+// textDocument/implementation: a Location for each implementing method, none when the name
+// under the cursor isn't a call on an interface
+function TServer.ImplementationsAt(Params: TJSONObject): TJSONArray;
+begin
+  Result := TJSONArray.Create;
+  const Uri = Params.GetValue<string>('textDocument.uri');
+  var Text: string;
+  FLock.Enter;
+  try
+    if not FTexts.TryGetValue(Uri, Text) then
+      Text := '';
+  finally
+    FLock.Leave;
+  end;
+  const Path = PathOf(Uri);
+  if (Text = '') and FileExists(Path) then
+    Text := TFile.ReadAllText(Path);
+  for var T in Implementations(Path, Text, Params.GetValue<Integer>('position.line'),
+                               Params.GetValue<Integer>('position.character')) do
+  begin
+    var At := TJSONObject.Create;
+    At.AddPair('line', Num(T.Line - 1));
+    At.AddPair('character', Num(0));
+    var Range := TJSONObject.Create;
+    Range.AddPair('start', At);
+    Range.AddPair('end', TJSONValue(At.Clone));
+    var L := TJSONObject.Create;
+    L.AddPair('uri', UriOf(T.Path));
+    L.AddPair('range', Range);
+    Result.AddElement(L);
+  end;
+end;
+
 procedure TServer.Handle(Msg: TJSONObject);
 begin
   const MethodValue = Msg.GetValue('method');
@@ -636,6 +693,16 @@ begin
     var Caps := TJSONObject.Create;
     Caps.AddPair('textDocumentSync', Sync);
     Caps.AddPair('codeActionProvider', TJSONBool.Create(True));
+    Caps.AddPair('implementationProvider', TJSONBool.Create(True));
+    // the workspace's units, indexed in the background for go to implementation
+    var Root := '';
+    if Params.GetValue('rootUri') is TJSONString then
+      Root := PathOf(Params.GetValue<string>('rootUri'))
+    else if (Params.GetValue('workspaceFolders') is TJSONArray) and
+            (TJSONArray(Params.GetValue('workspaceFolders')).Count > 0) then
+      Root := PathOf(TJSONArray(Params.GetValue('workspaceFolders')).Items[0].GetValue<string>('uri'));
+    if (Root <> '') and DirectoryExists(Root) then
+      IndexFolder(Root);
     var Info := TJSONObject.Create;
     Info.AddPair('name', 'delphipp');
     var R := TJSONObject.Create;
@@ -660,6 +727,7 @@ begin
     try
       FPending.Remove(Uri);
       FActions.Remove(Uri);
+      FTexts.Remove(Uri);
     finally
       FLock.Leave;
     end;
@@ -670,6 +738,8 @@ begin
   end
   else if Method = 'textDocument/codeAction' then
     Reply(Id, CodeActions(Params.GetValue<string>('textDocument.uri')))
+  else if Method = 'textDocument/implementation' then
+    Reply(Id, ImplementationsAt(Params))
   else if Id <> nil then
   begin
     var Err := TJSONObject.Create;
