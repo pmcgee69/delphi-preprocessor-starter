@@ -730,6 +730,7 @@ begin
     var Sync := TJSONObject.Create;
     Sync.AddPair('openClose', TJSONBool.Create(True));
     Sync.AddPair('change', Num(1));
+    Sync.AddPair('save', TJSONObject.Create);    // didSave: the index reads that file again
     var Caps := TJSONObject.Create;
     Caps.AddPair('textDocumentSync', Sync);
     Caps.AddPair('codeActionProvider', TJSONBool.Create(True));
@@ -764,6 +765,8 @@ begin
     Want(Params.GetValue<string>('textDocument.uri'),
          Changes.Items[Changes.Count - 1].GetValue<string>('text'));
   end
+  else if Method = 'textDocument/didSave' then
+    Reindex(PathOf(Params.GetValue<string>('textDocument.uri')))
   else if Method = 'textDocument/didClose' then
   begin
     const Uri = Params.GetValue<string>('textDocument.uri');
@@ -779,6 +782,8 @@ begin
     P.AddPair('uri', Uri);
     P.AddPair('diagnostics', TJSONArray.Create);
     Notify('textDocument/publishDiagnostics', P);
+    // closed unsaved, its edits may be in the index: as saved again
+    Reindex(PathOf(Uri));
   end
   else if Method = 'textDocument/codeAction' then
     Reply(Id, CodeActions(Params.GetValue<string>('textDocument.uri')))

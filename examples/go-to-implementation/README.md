@@ -30,6 +30,7 @@ the project or its search path changes. For something bigger: Spring4D's
 `Tests\Spring.Tests.Delphi12.dproj` puts all of `Source` on its search path; there,
 `fInspectors.Add(inspector)` in `Spring.Container.Builder.pas` offers three lists' `Add`.
 
-It's a sketch, not the compiler: no overloads, no `as` or `with`, generic constraints unchecked,
-and a unit saved after the index was read isn't read again until the project changes or the IDE
-restarts.
+It's a sketch, not the compiler: no overloads, no `as` or `with`, generic constraints unchecked.
+The unit you ask from is read again whenever it has changed, saved or not, and Find References
+reads every unit open in the editor as it is; another unit saved meanwhile is read again when
+you next ask from it (in Zed, as soon as it's saved).

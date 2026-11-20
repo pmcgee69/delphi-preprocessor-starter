@@ -17,8 +17,8 @@ unit DelphiPP.Impl;
   receiver's interface (or one inheriting from it) with arguments that can be the receiver's: its
   method (a resolution clause's, else its own or its nearest ancestor's), and each descendant's
   override. A sketch, not a compiler: no overloads, no uses-clause order (a name in two units:
-  the first indexed), no `as` or `with`, generic constraints unchecked. Files saved after the
-  index was built are not re-read until the server restarts. }
+  the first indexed), no `as` or `with`, generic constraints unchecked. A file is read again
+  when it is asked from, or (Reindex) saved, or read as an editor has it. }
 
 interface
 
@@ -66,10 +66,15 @@ function TypeDefinitions(const Path, Text: string; Line, Character: Integer;
 function References(const Path, Text: string; Line, Character: Integer; IncludeDeclaration: Boolean;
   const TextOf: TFunc<string, string> = nil; WaitMs: Cardinal = 30000): TArray<TImplTarget>;
 
+// read a file of the index again, in the background: saved (Text '': as on disk), or as an
+// editor has it. Each query does the same for its own file first, so the file you ask from is
+// never stale
+procedure Reindex(const Path: string; const Text: string = '');
+
 implementation
 
 uses
-  System.Classes, System.IOUtils, System.SyncObjs, System.Generics.Collections, System.Generics.Defaults,
+  System.Classes, System.IOUtils, System.SyncObjs, System.Generics.Collections, System.Generics.Defaults, System.Hash,
   TreeSitter.Api;
 
 type
@@ -120,6 +125,8 @@ var
   ImplCache: TObjectDictionary<string, TList<string>>;
   Names: TDictionary<string, TPlace>; // a unit's type, routine, var or const: where it is declared
   Aliases: TDictionary<string, string>; // `IRowMapper = IRowMapper<TObject>;`: irowmapper -> irowmapper<tobject>
+  Owners: TDictionary<string, Integer>; // 'f:' + a function, 'a:' + an alias -> the file that gave it
+  Indexed: TDictionary<Integer, Integer>; // a file -> its text's hash, as indexed
                                       // (the first unit's, for a name in two)
   Stopping: Boolean;                 // the unit finalizing (the IDE unloading its package)
   Built: Boolean;
@@ -474,7 +481,7 @@ end;
 
 // `IRowMapper = IRowMapper<TObject>;`: another name for a type. Once IRowMapper<T> had a key of its
 // own, rowMapper: IRowMapper found nothing (Delf's 125e, 20 Nov): the alias is followed instead
-procedure AddAlias(const Src: TBytesA; const Decl: TSNode);
+procedure AddAlias(FileIdx: Integer; const Src: TBytesA; const Decl: TSNode);
 begin
   var NameN := Default(TSNode);
   for var C in Kids(Decl) do
@@ -496,7 +503,8 @@ begin
   const K = DeclKey(Txt(Src, NameN));
   if Key(Target) = K then
     Exit;                             // the same name from another unit: IEnumerator = Spring.IEnumerator
-  Aliases.TryAdd(K, Target);
+  if Aliases.TryAdd(K, Target) then
+    Owners.AddOrSetValue('a:' + K, FileIdx);
 end;
 
 // a type through its aliases, in full: irowmapper -> irowmapper<tobject>; a class or interface
@@ -511,6 +519,20 @@ begin
       Exit;
     Result := Target;
   end;
+end;
+
+// a plain function's result type, the first unit's
+procedure AddFunc(FileIdx: Integer; const Name, Ty: string);
+begin
+  if Funcs.TryAdd(Name, Ty) then
+    Owners.AddOrSetValue('f:' + Name, FileIdx);
+end;
+
+function HashOf(const Src: TBytesA): Integer;
+begin
+  Result := 0;
+  if Length(Src) > 0 then
+    Result := THashBobJenkins.GetHashValue(Src[0], Length(Src));
 end;
 
 procedure IndexNode(FileIdx: Integer; const Src: TBytesA; const N: TSNode; InType: Boolean);
@@ -528,7 +550,7 @@ begin
           Break;
         end;
     IndexType(FileIdx, Src, N);
-    AddAlias(Src, N);
+    AddAlias(FileIdx, Src, N);
     InType := True;
   end
   else if K = 'defProc' then
@@ -556,7 +578,7 @@ begin
         if not IsNull(Id) then
           AddName(FileIdx, Src, Id);  // a routine with no declaration in an interface section
         if not IsNull(Id) and not IsNull(T) and not Funcs.ContainsKey(Txt(Src, Id).ToLower) then
-          Funcs.Add(Txt(Src, Id).ToLower, Full(Txt(Src, T)));
+          AddFunc(FileIdx, Txt(Src, Id).ToLower, Full(Txt(Src, T)));
       end;
     end;
     Exit;
@@ -568,7 +590,7 @@ begin
     if not IsNull(Id) then
       AddName(FileIdx, Src, Id);
     if not IsNull(Id) and not IsNull(T) and not Funcs.ContainsKey(Txt(Src, Id).ToLower) then
-      Funcs.Add(Txt(Src, Id).ToLower, Full(Txt(Src, T)));
+      AddFunc(FileIdx, Txt(Src, Id).ToLower, Full(Txt(Src, T)));
   end
   else if ((K = 'declVar') or (K = 'declConst')) and not InType then
   begin
@@ -617,6 +639,7 @@ begin
       end;
       const Idx = Paths.Add(F);
       Globals.Add(TDictionary<string, string>.Create);
+      Indexed.AddOrSetValue(Idx, HashOf(Src));
       const Tree = ts_parser_parse_string(Parser, nil, PByte(Src), Length(Src));
       try
         IndexNode(Idx, Src, ts_tree_root_node(Tree), False);
@@ -644,7 +667,7 @@ begin
       try
         Lock.Enter;
         try
-          Paths.Clear; Globals.Clear; Types.Clear; Impls.Clear; Funcs.Clear; ImplCache.Clear; Names.Clear; Aliases.Clear;
+          Paths.Clear; Globals.Clear; Types.Clear; Impls.Clear; Funcs.Clear; ImplCache.Clear; Names.Clear; Aliases.Clear; Owners.Clear; Indexed.Clear;
           try
             Build(Deep, Flat);
           except
@@ -886,6 +909,96 @@ begin
     if SameText(Paths[I], Path) then
       Exit(I);
   Result := -1;
+end;
+
+// the file again, if its text isn't what was indexed (the lock held): what it gave out first,
+// then read as Text is. A name another unit also declares stays that unit's, as in Build
+procedure Refresh(const Path, Text: string);
+begin
+  const Idx = FileIndexOf(Path);
+  if (Idx < 0) or (Text = '') then
+    Exit;                             // not the index's: it never was in it
+  const Src = Bytes(Text);
+  const H = HashOf(Src);
+  var Old: Integer;
+  if Indexed.TryGetValue(Idx, Old) and (Old = H) then
+    Exit;
+  Indexed.AddOrSetValue(Idx, H);
+  var Gone: TArray<string> := nil;
+  for var Pair in Types do
+    if Pair.Value.FileIdx = Idx then
+      Gone := Gone + [Pair.Key];
+  for var K in Gone do
+    Types.Remove(K);
+  Gone := nil;
+  for var Pair in Impls do
+    if Pair.Value.FileIdx = Idx then
+      Gone := Gone + [Pair.Key];
+  for var K in Gone do
+    Impls.Remove(K);
+  Gone := nil;
+  for var Pair in Names do
+    if Pair.Value.FileIdx = Idx then
+      Gone := Gone + [Pair.Key];
+  for var K in Gone do
+    Names.Remove(K);
+  Gone := nil;
+  for var Pair in Owners do
+    if Pair.Value = Idx then
+      Gone := Gone + [Pair.Key];
+  for var K in Gone do
+  begin
+    Owners.Remove(K);
+    if K.StartsWith('f:') then
+      Funcs.Remove(K.Substring(2))
+    else
+      Aliases.Remove(K.Substring(2));
+  end;
+  Globals[Idx].Clear;
+  ImplCache.Clear;
+  const Parser = ts_parser_new;
+  try
+    ts_parser_set_language(Parser, tree_sitter_delphi13);
+    const Tree = ts_parser_parse_string(Parser, nil, PByte(Src), Length(Src));
+    try
+      IndexNode(Idx, Src, ts_tree_root_node(Tree), False);
+    finally
+      ts_tree_delete(Tree);
+    end;
+  finally
+    ts_parser_delete(Parser);
+  end;
+  for var Info in Types.Values do
+    for var I := 0 to Info.Parents.Count - 1 do
+      Info.Parents[I] := Resolve(Info.Parents[I]);
+end;
+
+procedure Reindex(const Path, Text: string);
+begin
+  TInterlocked.Increment(Running);
+  TThread.CreateAnonymousThread(procedure
+    begin
+      try
+        try
+          if Ready.WaitFor(60000) <> wrSignaled then
+            Exit;
+          var S := Text;
+          if S = '' then
+            S := TextOfFile(Path);
+          Lock.Enter;
+          try
+            if not Stopping then
+              Refresh(Path, S);
+          finally
+            Lock.Leave;
+          end;
+        except
+          // the index as it was
+        end;
+      finally
+        TInterlocked.Decrement(Running);
+      end;
+    end).Start;
 end;
 
 { a query: the file as the editor has it, parsed; the identifier under the cursor, the way down
@@ -1263,6 +1376,7 @@ begin
     Exit;
   Lock.Enter;
   try
+    Refresh(Path, Text);
     const Q = TQuery.Create(Path, Text, Line, Character);
     try
       var T: TImplTarget;
@@ -1284,6 +1398,7 @@ begin
     Exit;
   Lock.Enter;
   try
+    Refresh(Path, Text);
     const Q = TQuery.Create(Path, Text, Line, Character);
     try
       if not Q.Found then
@@ -1434,6 +1549,7 @@ begin
     Exit;
   Lock.Enter;
   try
+    Refresh(Path, Text);
     const Q = TQuery.Create(Path, Text, Line, Character);
     try
       if not Q.Found then
@@ -1501,6 +1617,7 @@ begin
     Exit;
   Lock.Enter;
   try
+    Refresh(Path, Text);
     var Goal: TImplTarget;
     const Q = TQuery.Create(Path, Text, Line, Character);
     try
@@ -1528,7 +1645,9 @@ begin
         begin
           if Assigned(TextOf) then
             S := TextOf(F);
-          if S = '' then
+          if S <> '' then
+            Refresh(F, S)             // open in an editor, maybe edited
+          else
           try
             S := TextOfFile(F);
           except
@@ -1593,6 +1712,8 @@ initialization
   ImplCache := TObjectDictionary<string, TList<string>>.Create([doOwnsValues]);
   Names := TDictionary<string, TPlace>.Create;
   Aliases := TDictionary<string, string>.Create;
+  Owners := TDictionary<string, Integer>.Create;
+  Indexed := TDictionary<Integer, Integer>.Create;
 
 finalization
   // an index still being built stops at its next file; nothing is freed under it (the IDE
@@ -1603,6 +1724,8 @@ finalization
   ImplCache.Free;
   Names.Free;
   Aliases.Free;
+  Owners.Free;
+  Indexed.Free;
   Funcs.Free;
   Impls.Free;
   Types.Free;
