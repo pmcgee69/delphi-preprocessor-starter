@@ -3,12 +3,16 @@ unit DelphiPP.GoToImpl;
 { Go to implementation in the Delphi IDE's editor: on a call through an interface,
   `x.DoSomething()`, each class's method that implements it, as Zed has it through
   delphipp's language server (..\DelphiPP.Impl.pas, the same index). Ctrl+click goes
-  to the interface; Ctrl+Shift+click (or Ctrl+Alt+click) on the method's name, or Go to Implementation on
+  to the interface; Ctrl+Shift+click on the method's name, or Go to Implementation on
   the editor's right-click menu (after Find Declaration), goes to the class: straight
   there when there is one, a menu to choose from when there are more. Wished for by
   a Delphi developer, passed on by the user (20 Nov): "In delphi it's so much harder
   to navigate to the implementation of an interface, and it's one of the reasons
-  people don't use them as much as they could/should."
+  people don't use them as much as they could/should." (Ctrl+Alt+click, the first
+  way, is gone: the user, 21 Nov, "delete ^Alt-click".)
+
+  Find References (delphipp), on the same menu: every use of the name, listed in the
+  Messages view, where a double-click opens it.
 
   The index is the active project's: the .pas files in its folder and below, and
   those in each folder of its search path (the active configuration and platform's),
@@ -33,9 +37,11 @@ const
   MenuCategory = 'DelphiPP.GoToImplementation';
   DeclCategory = 'DelphiPP.FindDeclaration';
   TypeCategory = 'DelphiPP.GoToTypeDefinition';
+  RefsCategory = 'DelphiPP.FindReferences';
+  RefsGroup    = 'delphipp: References';
 
 type
-  TAskKind = (akImplementation, akDeclaration, akTypeDefinition);
+  TAskKind = (akImplementation, akDeclaration, akTypeDefinition, akReferences);
 
   TGoToImpl = class(TNTACodeEditorNotifier)
   private
@@ -43,13 +49,11 @@ type
     FActions : TActionList;
     FDeclActions: TActionList;
     FTypeActions: TActionList;
+    FRefsActions: TActionList;
     FTargets : TArray<TImplTarget>;
     FIndexKey: string;                // what the index was built from: the project and its path
-    FTaken   : Boolean;               // a Ctrl+Shift or Ctrl+Alt mouse-down taken: its mouse-up too
-    FAltHeld : Boolean;               // asked by Ctrl+Alt+click: wait for the keys too
-    // the answer, held until Ctrl, Alt and the mouse button are up: Alt let go opens the IDE's
-    // main menu, which closed the popup as it opened (user, 20 Nov: "the same dialog flickers
-    // ghost-like only for a small part of a second, no text visible")
+    FTaken   : Boolean;               // a Ctrl+Shift mouse-down taken: its mouse-up too
+    // the answer, held until the mouse button is up: a menu shown mid-click
     FWait    : TTimer;
     FAt      : TPoint;
     FPrefix  : string;                // before each item's name: 'No implementation: its declaration, '
@@ -80,6 +84,7 @@ type
     procedure OnUpdateDeclaration(Sender: TObject);
     procedure OnTypeDefinition(Sender: TObject);
     procedure OnUpdateTypeDefinition(Sender: TObject);
+    procedure OnFindReferences(Sender: TObject);
     procedure UpdateFor(A: TAction; Kind: TAskKind);
     procedure OnItem(Sender: TObject);
     procedure EnsureIndex(const FileName: string);
@@ -101,6 +106,7 @@ var
   MenuAdded: Boolean;
   DeclAdded: Boolean;
   TypeAdded: Boolean;
+  RefsAdded: Boolean;
 
 // the buffer's text: the editor gives it as UTF-8
 function BufferText(const Buffer: IOTAEditBuffer): TBytes;
@@ -410,6 +416,15 @@ begin
   Y.Category   := TypeCategory;
   Y.OnExecute  := OnTypeDefinition;
   Y.OnUpdate   := OnUpdateTypeDefinition;
+  // every use of the name, in the Messages view (user, 21 Nov: "start with find references")
+  FRefsActions := TActionList.Create(nil);
+  const R  = TAction.Create(FRefsActions);
+  R.ActionList := FRefsActions;
+  R.Caption    := 'Find References (delphipp)';
+  R.Hint       := 'Every use of this name, from delphipp''s index, in the Messages view';
+  R.Category   := RefsCategory;
+  R.OnExecute  := OnFindReferences;
+  R.OnUpdate   := OnUpdateDeclaration;  // wherever there is a declaration to find
   FHint  := TCodeHint.Create(nil);
   FHover := TTimer.Create(nil);
   FHover.Enabled := False;
@@ -425,6 +440,7 @@ begin
   FHover.Free;
   FHint.Free;
   FWait.Free;
+  FRefsActions.Free;
   FTypeActions.Free;
   FDeclActions.Free;
   FActions.Free;
@@ -435,14 +451,9 @@ end;
 procedure TGoToImpl.OnWait(Sender: TObject);
 begin
   try
-    // the keys too: a popup menu open while Alt is pressed or let go is closed by Windows. Shown
-    // with the keys still held (and Alt "disarmed" by a dummy key at the click), it flickered or
-    // seemed not to show at all (user, 20 Nov: "^Alt-click naively seems to do nothing ... but
-    // ^click, followed by ^Alt-click, flickers the same (prob) msg box for an instant")
-    // Ctrl+Shift+click has no Alt: its menu waits for the mouse button only (user, 20 Nov: "try
-    // ^shift-click")
-    if (FAltHeld and ((GetAsyncKeyState(VK_MENU) < 0) or (GetAsyncKeyState(VK_CONTROL) < 0))) or
-       (GetAsyncKeyState(VK_LBUTTON) < 0) or (GetAsyncKeyState(VK_RBUTTON) < 0) then
+    // the mouse button up first (Ctrl+Alt+click also had to wait for Alt, whose release closes a
+    // popup menu: user, 20 Nov, "try ^shift-click", and 21 Nov, "delete ^Alt-click")
+    if (GetAsyncKeyState(VK_LBUTTON) < 0) or (GetAsyncKeyState(VK_RBUTTON) < 0) then
       Exit;                           // still held: look again in 30 ms
     FWait.Enabled := False;
     if FTargets = nil then
@@ -612,6 +623,31 @@ begin
   case Kind of
     akDeclaration:    Result := Definitions(FileName, Text, CP.Line - 1, Ch, WaitMs);
     akTypeDefinition: Result := TypeDefinitions(FileName, Text, CP.Line - 1, Ch, WaitMs);
+    akReferences:
+    begin
+      // the other files open in the editor, as it has them, not as saved
+      const Open = TDictionary<string, string>.Create;
+      try
+        var Buffers: IOTAEditBufferIterator;
+        if (BorlandIDEServices as IOTAEditorServices).GetEditBufferIterator(Buffers) then
+          for var I := 0 to Buffers.Count - 1 do
+          try
+            const B = Buffers.EditBuffers[I];
+            if (B <> nil) and B.IsModified then
+              Open.AddOrSetValue(B.FileName.ToLower, TEncoding.UTF8.GetString(BufferText(B)));
+          except
+            // that one as saved
+          end;
+        Result := References(FileName, Text, CP.Line - 1, Ch, True,
+          function(P: string): string
+          begin
+            if not Open.TryGetValue(P.ToLower, Result) then
+              Result := '';
+          end, WaitMs);
+      finally
+        Open.Free;
+      end;
+    end;
   else
     Result := Implementations(FileName, Text, CP.Line - 1, Ch, WaitMs);
   end;
@@ -746,7 +782,7 @@ begin
     if (View = nil) or (View.Buffer = nil) then
       Exit;
     const Mods = Shift * [ssCtrl, ssAlt, ssShift];
-    if (Mods <> [ssCtrl, ssShift]) and (Mods <> [ssCtrl, ssAlt]) then
+    if Mods <> [ssCtrl, ssShift] then
     begin
       EnsureIndex(View.Buffer.FileName);          // read early, so the first ask is quick
       Exit;
@@ -761,7 +797,6 @@ begin
     var At := Editor.ClientToScreen(Point(X, Y + 16));
     Handled  := True;               // not the IDE's: no selection extended, no Ctrl+click
     FTaken   := True;
-    FAltHeld := ssAlt in Mods;
     // after the editor's event returns: a menu inside it would be shown mid-click
     TThread.ForceQueue(nil,
       procedure
@@ -845,7 +880,6 @@ begin
     const View = (BorlandIDEServices as IOTAEditorServices).TopView;
     if View <> nil then
     begin
-      FAltHeld := False;
       FFromMenu := True;
       Ask(View, View.CursorPos, CaretPoint(View), akImplementation);
     end;
@@ -859,7 +893,6 @@ begin
     const View = (BorlandIDEServices as IOTAEditorServices).TopView;
     if View <> nil then
     begin
-      FAltHeld := False;
       FFromMenu := True;
       Ask(View, View.CursorPos, CaretPoint(View), akDeclaration);
     end;
@@ -873,7 +906,6 @@ begin
     const View = (BorlandIDEServices as IOTAEditorServices).TopView;
     if View <> nil then
     begin
-      FAltHeld := False;
       FFromMenu := True;
       Ask(View, View.CursorPos, CaretPoint(View), akTypeDefinition);
     end;
@@ -884,6 +916,52 @@ end;
 procedure TGoToImpl.OnUpdateTypeDefinition(Sender: TObject);
 begin
   UpdateFor(Sender as TAction, akTypeDefinition);
+end;
+
+// every use of the name at the caret, in the Messages view: a tab of its own, cleared each time;
+// a double-click on a line opens the file there
+procedure TGoToImpl.OnFindReferences(Sender: TObject);
+begin
+  try
+    const View = (BorlandIDEServices as IOTAEditorServices).TopView;
+    if (View = nil) or (View.Buffer = nil) then
+      Exit;
+    EnsureIndex(View.Buffer.FileName);
+    var Found: TArray<TImplTarget>;
+    const Was = Screen.Cursor;
+    Screen.Cursor := crHourGlass;
+    try
+      Found := Query(View, View.CursorPos, akReferences, 20000);
+    finally
+      Screen.Cursor := Was;
+    end;
+    const Messages = BorlandIDEServices as IOTAMessageServices;
+    var Group := Messages.GetGroup(RefsGroup);
+    if Group = nil then
+      Group := Messages.AddMessageGroup(RefsGroup);
+    Messages.ClearMessageGroup(Group);
+    var Units := 0;
+    var Last := '';
+    for var T in Found do
+      if not SameText(T.Path, Last) then
+      begin
+        Inc(Units);
+        Last := T.Path;
+      end;
+    if Found = nil then
+      Messages.AddTitleMessage(Format('No references found (%d units read)', [IndexedCount]), Group)
+    else
+      Messages.AddTitleMessage(Format('%d references in %d units (%d units read)',
+        [Length(Found), Units, IndexedCount]), Group);
+    for var T in Found do
+    begin
+      var Ref: Pointer;
+      Messages.AddToolMessage(T.Path, T.Name, 'delphipp', T.Line, T.Col + 1, nil, Ref, Group);
+    end;
+    Messages.ShowMessageView(Group);
+  except
+    // the editor goes on whatever happens here
+  end;
 end;
 
 { Register }
@@ -900,8 +978,10 @@ begin
     DeclAdded := True;
     Menu.RegisterActionList(Notifier.FTypeActions, TypeCategory, cEdMenuCatIdentifier);
     TypeAdded := True;
+    Menu.RegisterActionList(Notifier.FRefsActions, RefsCategory, cEdMenuCatIdentifier);
+    RefsAdded := True;
   except
-    // Ctrl+Alt+click alone
+    // Ctrl+Shift+click alone
   end;
 end;
 
@@ -932,6 +1012,11 @@ finalization
   if TypeAdded then
   try
     (BorlandIDEServices as IOTAEditorServices).GetEditorLocalMenu.UnregisterActionList(TypeCategory);
+  except
+  end;
+  if RefsAdded then
+  try
+    (BorlandIDEServices as IOTAEditorServices).GetEditorLocalMenu.UnregisterActionList(RefsCategory);
   except
   end;
   if NotifierIndex >= 0 then

@@ -2,7 +2,7 @@
 
 In Delphi, Ctrl+click on `x.DoSomething()` goes to the interface's declaration. With the IDE
 package (`delphi\ide\DelphiPPIDE.bpl`, see [its README](../../delphi/ide/README.md)) installed,
-**Ctrl+Shift+click** (or Ctrl+Alt+click) goes to the classes that implement it, or right-click the method's name and
+**Ctrl+Shift+click** goes to the classes that implement it, or right-click the method's name and
 choose **Go to Implementation**, just below Find Declaration. With one implementation it goes
 straight there; with more, a menu lists them, each with its unit and line.
 
@@ -15,6 +15,11 @@ Open `GoToImpl.dpr` here. In `Shapes.pas`, at the end:
 | `Service.Value;` (a property) | `TBase.Value`, `TOther.Value` |
 | `CreateMyObject.DoSomething;` (a function's result) | the same three as `x.DoSomething()` |
 | `FKids.DoSomething;` (an `IChild`, which no class implements) | nothing: the menu says so |
+
+**Find References (delphipp)**, on the same menu, lists every use in the Messages view. Here, on
+`DoSomething` in `IMyInterface`: the declaration, `x.DoSomething()` in `Use`, and in `Fields.pas`
+`FService.DoSomething`, `FKids.DoSomething` (an `IChild` inherits it) and
+`CreateMyObject.DoSomething`. On `IMyInterface` itself: its 10 uses, both units.
 
 The index is the active project's: the `.pas` files in its folder and below, and in each folder of
 its search path. It's read in the background when you first click in an editor, and again when
