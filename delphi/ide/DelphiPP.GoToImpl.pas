@@ -30,6 +30,7 @@ uses
 
 const
   MenuCategory = 'DelphiPP.GoToImplementation';
+  DeclCategory = 'DelphiPP.FindDeclaration';
 
 type
   TAskKind = (akImplementation, akDeclaration);
@@ -38,6 +39,7 @@ type
   private
     FMenu    : TPopupMenu;
     FActions : TActionList;
+    FDeclActions: TActionList;
     FTargets : TArray<TImplTarget>;
     FIndexKey: string;                // what the index was built from: the project and its path
     FTaken   : Boolean;               // a Ctrl+Alt mouse-down taken: its mouse-up too
@@ -70,6 +72,7 @@ var
   Notifier: TGoToImpl;
   NotifierIndex: Integer = -1;
   MenuAdded: Boolean;
+  DeclAdded: Boolean;
 
 // the buffer's text: the editor gives it as UTF-8
 function BufferText(const Buffer: IOTAEditBuffer): TBytes;
@@ -182,21 +185,24 @@ begin
   end;
 end;
 
-// what to index for a file: the active project's folder and the file's repository, with their
-// subfolders (Deep); the project's search path and the IDE's library path (Flat). The key: what
-// it was built from, to read it again when that changes
+// what to index for a file, as the IDE sees it: the active project's folder, with its
+// subfolders (Deep), and its search path, the file's own folder and the IDE's library path
+// (Flat). With no project, the file's repository instead of the project's folder: a file opened
+// on its own (user, 20 Nov: "i dunno if we should be assuming repos 'tho ... the ide works with
+// projects, right?"). The key: what it was built from, to read it again when that changes
 function IndexScope(const FileName: string; out Deep, Flat: TArray<string>): string;
 begin
-  Deep := [RepoRoot(FileName)];
-  Flat := nil;
+  Deep := nil;
+  Flat := [ExcludeTrailingPathDelimiter(ExtractFilePath(FileName))];
   var Plat := {$IFDEF WIN64} 'Win64' {$ELSE} 'Win32' {$ENDIF};
   var Conf := 'Debug';
   const Project = GetActiveProject;
-  if Project <> nil then
+  if Project = nil then
+    Deep := [RepoRoot(FileName)]
+  else
   begin
     const Dir = ExtractFilePath(Project.FileName);
-    if not SameText(ExcludeTrailingPathDelimiter(Dir), Deep[0]) then
-      Deep := Deep + [Dir];
+    Deep := [Dir];
     var Search := '';
     try
       const Configs = Project.ProjectOptions as IOTAProjectOptionsConfigurations;
@@ -211,7 +217,7 @@ begin
     except
       // the folders alone
     end;
-    Flat := PathFolders(Search, Dir, Plat, Conf);
+    Flat := Flat + PathFolders(Search, Dir, Plat, Conf);
   end;
   Flat := Flat + PathFolders(LibraryPath(Plat), ExtractFilePath(FileName), Plat, Conf);
   Result := string.Join(';', Deep) + '|' + string.Join(';', Flat);
@@ -252,12 +258,14 @@ begin
   A.OnExecute  := OnExecute;
   A.OnUpdate   := OnUpdate;
   // the IDE's own Find Declaration needs the project to know where each unit is (user, 20 Nov:
-  // "i think you are being generous to think the ide will find declaration")
-  const D  = TAction.Create(FActions);
-  D.ActionList := FActions;
+  // "i think you are being generous to think the ide will find declaration"). Its own list and
+  // category: a second action in the first list wasn't shown ("there is no other FD listed")
+  FDeclActions := TActionList.Create(nil);
+  const D  = TAction.Create(FDeclActions);
+  D.ActionList := FDeclActions;
   D.Caption    := 'Find Declaration (delphipp)';
   D.Hint       := 'Where this name is declared, from delphipp''s index';
-  D.Category   := MenuCategory;
+  D.Category   := DeclCategory;
   D.OnExecute  := OnFindDeclaration;
   D.OnUpdate   := OnUpdate;
   OnEditorMouseDownEx := OnMouseDown;
@@ -267,6 +275,7 @@ end;
 destructor TGoToImpl.Destroy;
 begin
   FWait.Free;
+  FDeclActions.Free;
   FActions.Free;
   FMenu.Free;
   inherited;
@@ -368,9 +377,10 @@ begin
   for var I := 0 to High(FTargets) do
     begin
       const Item = TMenuItem.Create(FMenu);
-      // after a tab, right-aligned as a shortcut is
-      Item.Caption := FTargets[I].Name.Replace('&', '&&') + #9 +
-                      ExtractFileName(FTargets[I].Path) + ' ' + IntToStr(FTargets[I].Line);
+      // in one piece: after a tab, as a shortcut is, it was cut off (user, 20 Nov: the
+      // declaration's unit shown as "Spring.Container.Build")
+      Item.Caption := (FTargets[I].Name + '  -  ' + ExtractFileName(FTargets[I].Path) + ' ' +
+                       IntToStr(FTargets[I].Line)).Replace('&', '&&');
       Item.Tag     := I;
       Item.OnClick := OnItem;
       FMenu.Items.Add(Item);
@@ -473,9 +483,11 @@ begin
   Notifier := TGoToImpl.Create;
   NotifierIndex := (BorlandIDEServices as INTACodeEditorServices).AddEditorEventsNotifier(Notifier);
   try
-    (BorlandIDEServices as IOTAEditorServices).GetEditorLocalMenu
-      .RegisterActionList(Notifier.FActions, MenuCategory, cEdMenuCatIdentifier);
+    const Menu = (BorlandIDEServices as IOTAEditorServices).GetEditorLocalMenu;
+    Menu.RegisterActionList(Notifier.FActions, MenuCategory, cEdMenuCatIdentifier);
     MenuAdded := True;
+    Menu.RegisterActionList(Notifier.FDeclActions, DeclCategory, cEdMenuCatIdentifier);
+    DeclAdded := True;
   except
     // Ctrl+Alt+click alone
   end;
@@ -488,6 +500,11 @@ finalization
   if MenuAdded then
   try
     (BorlandIDEServices as IOTAEditorServices).GetEditorLocalMenu.UnregisterActionList(MenuCategory);
+  except
+  end;
+  if DeclAdded then
+  try
+    (BorlandIDEServices as IOTAEditorServices).GetEditorLocalMenu.UnregisterActionList(DeclCategory);
   except
   end;
   if NotifierIndex >= 0 then
