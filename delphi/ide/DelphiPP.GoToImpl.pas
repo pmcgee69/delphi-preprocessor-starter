@@ -56,9 +56,13 @@ type
       X, Y: Integer; var Handled: Boolean);
     procedure OnExecute(Sender: TObject);
     procedure OnFindDeclaration(Sender: TObject);
-    procedure OnUpdate(Sender: TObject);
+    procedure OnUpdateImplementation(Sender: TObject);
+    procedure OnUpdateDeclaration(Sender: TObject);
+    procedure UpdateFor(A: TAction; Kind: TAskKind);
     procedure OnItem(Sender: TObject);
     procedure EnsureIndex(const FileName: string);
+    function Query(const View: IOTAEditView; Pos: TOTAEditPos; Kind: TAskKind;
+      WaitMs: Cardinal): TArray<TImplTarget>;
     procedure Ask(const View: IOTAEditView; Pos: TOTAEditPos; const At: TPoint; Kind: TAskKind);
     procedure ShowMenu(const At: TPoint; const Notes: TArray<string>);
   protected
@@ -256,7 +260,7 @@ begin
   A.Hint       := 'The classes'' methods that implement this interface method (Ctrl+Alt+click)';
   A.Category   := MenuCategory;
   A.OnExecute  := OnExecute;
-  A.OnUpdate   := OnUpdate;
+  A.OnUpdate   := OnUpdateImplementation;
   // the IDE's own Find Declaration needs the project to know where each unit is (user, 20 Nov:
   // "i think you are being generous to think the ide will find declaration"). Its own list and
   // category: a second action in the first list wasn't shown ("there is no other FD listed")
@@ -267,7 +271,7 @@ begin
   D.Hint       := 'Where this name is declared, from delphipp''s index';
   D.Category   := DeclCategory;
   D.OnExecute  := OnFindDeclaration;
-  D.OnUpdate   := OnUpdate;
+  D.OnUpdate   := OnUpdateDeclaration;
   OnEditorMouseDownEx := OnMouseDown;
   OnEditorMouseUpEx   := OnMouseUp;
 end;
@@ -315,13 +319,15 @@ begin
   IndexFolders(Deep, Flat);
 end;
 
-procedure TGoToImpl.Ask(const View: IOTAEditView; Pos: TOTAEditPos; const At: TPoint; Kind: TAskKind);
+// the implementations, or the declaration, of the name at Pos in the view's file as the editor
+// has it; waiting up to WaitMs for the index
+function TGoToImpl.Query(const View: IOTAEditView; Pos: TOTAEditPos; Kind: TAskKind;
+  WaitMs: Cardinal): TArray<TImplTarget>;
 begin
-  FTargets := nil;
+  Result := nil;
   if (View = nil) or (View.Buffer = nil) then
     Exit;
   const FileName = View.Buffer.FileName;
-  EnsureIndex(FileName);
   const Text = TEncoding.UTF8.GetString(BufferText(View.Buffer));
   // the editor's column (tabs expanded) as a character of the line
   var CP: TOTACharPos;
@@ -331,24 +337,32 @@ begin
     Exit;
   const LineBytes = TEncoding.UTF8.GetBytes(Lines[CP.Line - 1]);
   const Ch = Length(TEncoding.UTF8.GetString(LineBytes, 0, Min(Max(CP.CharIndex, 0), Length(LineBytes))));
+  if Kind = akDeclaration then
+    Result := Definitions(FileName, Text, CP.Line - 1, Ch, WaitMs)
+  else
+    Result := Implementations(FileName, Text, CP.Line - 1, Ch, WaitMs);
+end;
+
+procedure TGoToImpl.Ask(const View: IOTAEditView; Pos: TOTAEditPos; const At: TPoint; Kind: TAskKind);
+begin
+  FTargets := nil;
+  if (View = nil) or (View.Buffer = nil) then
+    Exit;
+  EnsureIndex(View.Buffer.FileName);
   var Notes: TArray<string> := nil;
   const Was = Screen.Cursor;
   Screen.Cursor := crHourGlass;
   try
     // the first time, the index is still being read: a second or so for Spring4D's 367 units
-    if Kind = akDeclaration then
+    FTargets := Query(View, Pos, Kind, 20000);
+    if FTargets = nil then
     begin
-      FTargets := Definitions(FileName, Text, CP.Line - 1, Ch, 20000);
-      if FTargets = nil then
-        Notes := [Format('No declaration found (%d units read)', [IndexedCount])];
-    end
-    else
-    begin
-      FTargets := Implementations(FileName, Text, CP.Line - 1, Ch, 20000);
-      if FTargets = nil then
+      if Kind = akDeclaration then
+        Notes := [Format('No declaration found (%d units read)', [IndexedCount])]
+      else
       begin
         // not a method called through an interface, or none implements it: its declaration
-        FTargets := Definitions(FileName, Text, CP.Line - 1, Ch, 0);
+        FTargets := Query(View, Pos, akDeclaration, 0);
         Notes := [Format('No implementation found (%d units read)', [IndexedCount])];
         if FTargets <> nil then
           Notes := Notes + ['Its declaration:'];
@@ -469,11 +483,56 @@ begin
   end;
 end;
 
-procedure TGoToImpl.OnUpdate(Sender: TObject);
+// greyed when there is nothing to go to at the cursor: asked as the editor's menu is built, in a
+// few milliseconds; enabled while the units are still being read, when it can't tell (user,
+// 20 Nov, Go to Implementation on fInspectors: "maybe should just gray out the option?")
+procedure TGoToImpl.UpdateFor(A: TAction; Kind: TAskKind);
 begin
   try
-    (Sender as TAction).Enabled := (BorlandIDEServices as IOTAEditorServices).TopView <> nil;
+    const View = (BorlandIDEServices as IOTAEditorServices).TopView;
+    if (View = nil) or (View.Buffer = nil) then
+    begin
+      A.Enabled := False;
+      Exit;
+    end;
+    EnsureIndex(View.Buffer.FileName);
+    if IndexedCount = 0 then
+      A.Enabled := True
+    else
+      A.Enabled := Query(View, View.CursorPos, Kind, 0) <> nil;
   except
+    A.Enabled := True;
+  end;
+end;
+
+procedure TGoToImpl.OnUpdateImplementation(Sender: TObject);
+begin
+  UpdateFor(Sender as TAction, akImplementation);
+end;
+
+procedure TGoToImpl.OnUpdateDeclaration(Sender: TObject);
+begin
+  UpdateFor(Sender as TAction, akDeclaration);
+end;
+
+// just below the caret's character, on the screen: a menu asked for from the editor's own menu
+// opens there, not where that menu's item was (user, 20 Nov: "a little displaced")
+function CaretPoint(const View: IOTAEditView): TPoint;
+begin
+  Result := Mouse.CursorPos;
+  try
+    const Services = BorlandIDEServices as INTACodeEditorServices;
+    const Editor = Services.GetEditorForView(View);
+    if Editor = nil then
+      Exit;
+    const State = Services.EditorState[Editor];
+    const LineState = State.LogicalLineState[View.CursorPos.Line];
+    if LineState = nil then
+      Exit;
+    const R = State.GetCharacterPosPx(View.CursorPos.Col, LineState.EditorLineNum);
+    Result := Editor.ClientToScreen(Point(R.Left, R.Bottom + 2));
+  except
+    // where the mouse is
   end;
 end;
 
@@ -482,7 +541,7 @@ begin
   try
     const View = (BorlandIDEServices as IOTAEditorServices).TopView;
     if View <> nil then
-      Ask(View, View.CursorPos, Mouse.CursorPos, akImplementation);
+      Ask(View, View.CursorPos, CaretPoint(View), akImplementation);
   except
   end;
 end;
@@ -492,7 +551,7 @@ begin
   try
     const View = (BorlandIDEServices as IOTAEditorServices).TopView;
     if View <> nil then
-      Ask(View, View.CursorPos, Mouse.CursorPos, akDeclaration);
+      Ask(View, View.CursorPos, CaretPoint(View), akDeclaration);
   except
   end;
 end;
