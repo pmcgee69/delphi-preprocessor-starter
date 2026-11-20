@@ -106,6 +106,7 @@ var
   Funcs: TDictionary<string, string>;
   ImplCache: TObjectDictionary<string, TList<string>>;
   Names: TDictionary<string, TPlace>; // a unit's type, routine, var or const: where it is declared
+  Aliases: TDictionary<string, string>; // `IRowMapper = IRowMapper<TObject>;`: irowmapper -> irowmapper<tobject>
                                       // (the first unit's, for a name in two)
   Stopping: Boolean;                 // the unit finalizing (the IDE unloading its package)
   Built: Boolean;
@@ -440,6 +441,47 @@ begin
   Types.AddOrSetValue(K, Info);       // over a forward declaration (freeing it)
 end;
 
+// `IRowMapper = IRowMapper<TObject>;`: another name for a type. Once IRowMapper<T> had a key of its
+// own, rowMapper: IRowMapper found nothing (Delf's 125e, 20 Nov): the alias is followed instead
+procedure AddAlias(const Src: TBytesA; const Decl: TSNode);
+begin
+  var NameN := Default(TSNode);
+  for var C in Kids(Decl) do
+    if (KindOf(C) = 'identifier') or (KindOf(C) = 'genericTpl') then
+    begin
+      NameN := C;
+      Break;
+    end;
+  const T = TypeChild(Decl);
+  if IsNull(NameN) or IsNull(T) then
+    Exit;
+  // a type's name, maybe a unit's and with arguments: not a class, a record, a set, a range ...
+  const Target = Full(Txt(Src, T));
+  if Target = '' then
+    Exit;
+  for var Ch in Target do
+    if not CharInSet(Ch, ['a'..'z', '0'..'9', '_', '.', '<', '>', ',']) then
+      Exit;
+  const K = DeclKey(Txt(Src, NameN));
+  if Key(Target) = K then
+    Exit;                             // the same name from another unit: IEnumerator = Spring.IEnumerator
+  Aliases.TryAdd(K, Target);
+end;
+
+// a type through its aliases, in full: irowmapper -> irowmapper<tobject>; a class or interface
+// of that name first
+function Resolve(const Ty: string): string;
+begin
+  Result := Ty;
+  var Target: string;
+  for var I := 1 to 8 do
+  begin
+    if (Result = '') or Types.ContainsKey(Key(Result)) or not Aliases.TryGetValue(Key(Result), Target) then
+      Exit;
+    Result := Target;
+  end;
+end;
+
 procedure IndexNode(FileIdx: Integer; const Src: TBytesA; const N: TSNode; InType: Boolean);
 begin
   const K = KindOf(N);
@@ -455,6 +497,7 @@ begin
           Break;
         end;
     IndexType(FileIdx, Src, N);
+    AddAlias(Src, N);
     InType := True;
   end
   else if K = 'defProc' then
@@ -550,6 +593,10 @@ begin
         ts_tree_delete(Tree);
       end;
     end;
+    // every unit read: each heritage through its aliases (class(TInterfacedObject, IRowMapper))
+    for var Info in Types.Values do
+      for var I := 0 to Info.Parents.Count - 1 do
+        Info.Parents[I] := Resolve(Info.Parents[I]);
   finally
     Seen.Free;
     ts_parser_delete(Parser);
@@ -566,7 +613,7 @@ begin
       try
         Lock.Enter;
         try
-          Paths.Clear; Globals.Clear; Types.Clear; Impls.Clear; Funcs.Clear; ImplCache.Clear; Names.Clear;
+          Paths.Clear; Globals.Clear; Types.Clear; Impls.Clear; Funcs.Clear; ImplCache.Clear; Names.Clear; Aliases.Clear;
           try
             Build(Deep, Flat);
           except
@@ -747,7 +794,7 @@ begin
     Exit(TypeOfExpr(Src, ts_node_child(N, 0), Cls, FileIdx, Locals));
   if K = 'exprDot' then
   begin
-    var L := TypeOfExpr(Src, ts_node_child(N, 0), Cls, FileIdx, Locals);
+    var L := Resolve(TypeOfExpr(Src, ts_node_child(N, 0), Cls, FileIdx, Locals));
     const M = Txt(Src, ts_node_child(N, ts_node_child_count(N) - 1)).ToLower;
     var Info: TTypeInfo;
     var Depth := 0;
@@ -932,7 +979,7 @@ begin
       if not Q.IsMember then
         Exit;                         // a member's name: x.M with the cursor on M
       const Cls = Q.Cls;
-      const Ty = TypeOfExpr(Q.Src, ts_node_child(Q.Up, 0), Cls, Q.FileIdx, Q.Locals);
+      const Ty = Resolve(TypeOfExpr(Q.Src, ts_node_child(Q.Up, 0), Cls, Q.FileIdx, Q.Locals));
       var Info: TTypeInfo;
       if (Ty = '') or not Types.TryGetValue(Key(Ty), Info) or not Info.IsIntf then
         Exit;
@@ -1001,7 +1048,7 @@ end;
 // IList in IList<T> (ilist, or failing that the generic one with the fewest parameters)
 function FindType(const Name: string; out Info: TTypeInfo): Boolean;
 begin
-  const K = Key(Name);
+  const K = Key(Resolve(Name));
   if Types.TryGetValue(K, Info) then
     Exit( True );
   if Name.IndexOf('<') < 0 then
@@ -1257,6 +1304,7 @@ initialization
   Funcs := TDictionary<string, string>.Create;
   ImplCache := TObjectDictionary<string, TList<string>>.Create([doOwnsValues]);
   Names := TDictionary<string, TPlace>.Create;
+  Aliases := TDictionary<string, string>.Create;
 
 finalization
   // an index still being built stops at its next file; nothing is freed under it (the IDE
@@ -1266,6 +1314,7 @@ finalization
     Sleep(10);
   ImplCache.Free;
   Names.Free;
+  Aliases.Free;
   Funcs.Free;
   Impls.Free;
   Types.Free;
