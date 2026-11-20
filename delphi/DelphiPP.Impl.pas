@@ -69,7 +69,7 @@ function References(const Path, Text: string; Line, Character: Integer; IncludeD
 implementation
 
 uses
-  System.Classes, System.IOUtils, System.SyncObjs, System.Generics.Collections,
+  System.Classes, System.IOUtils, System.SyncObjs, System.Generics.Collections, System.Generics.Defaults,
   TreeSitter.Api;
 
 type
@@ -94,6 +94,8 @@ type
     TParams: TList<string>;
     Places: TDictionary<string, TPos>;          // a member -> where its name is declared;
                                                 // an overload's first
+    Dispatch: TDictionary<string, Char>;        // a method -> 'v' virtual or dynamic, 'a' abstract,
+                                                // 'o' override; none for a static method
     constructor Create;
     destructor Destroy; override;
   end;
@@ -132,11 +134,13 @@ begin
   Results := TDictionary<string, string>.Create;
   TParams := TList<string>.Create;
   Places := TDictionary<string, TPos>.Create;
+  Dispatch := TDictionary<string, Char>.Create;
 end;
 
 destructor TTypeInfo.Destroy;
 begin
   Parents.Free; Methods.Free; Resolutions.Free; Members.Free; Results.Free; TParams.Free; Places.Free;
+  Dispatch.Free;
   inherited;
 end;
 
@@ -399,6 +403,22 @@ begin
       end;
       Info.Methods.AddOrSetValue(Txt(Src, Name).ToLower, LineOf(C));
       Info.Places.TryAdd(Txt(Src, Name).ToLower, PosOf(Src, Name));
+      // its directives, after the parameters: `virtual; abstract;`, `override;`
+      var After := Txt(Src, C).ToLower;
+      const Close = After.LastIndexOf(')');
+      if Close >= 0 then
+        After := After.Substring(Close);
+      const Words = After.Split([' ', ';', ':', #9, #10, #13], TStringSplitOptions.ExcludeEmpty);
+      var D := #0;
+      for var W in Words do
+        if (W = 'abstract') then
+          D := 'a'
+        else if ((W = 'virtual') or (W = 'dynamic')) and (D <> 'a') then
+          D := 'v'
+        else if (W = 'override') and (D = #0) then
+          D := 'o';
+      if D <> #0 then
+        Info.Dispatch.TryAdd(Txt(Src, Name).ToLower, D);
       const T = FirstOf(C, 'typeref');
       if not IsNull(T) then
         Info.Results.AddOrSetValue(Txt(Src, Name).ToLower, Full(Txt(Src, T)));
@@ -993,74 +1013,6 @@ begin
   Result := Txt(Src, N).ToLower;
 end;
 
-function Implementations(const Path, Text: string; Line, Character: Integer;
-  WaitMs: Cardinal): TArray<TImplTarget>;
-begin
-  Result := nil;
-  if Ready.WaitFor(WaitMs) <> wrSignaled then
-    Exit;
-  Lock.Enter;
-  try
-    const Q = TQuery.Create(Path, Text, Line, Character);
-    try
-      if not Q.IsMember then
-        Exit;                         // a member's name: x.M with the cursor on M
-      const Cls = Q.Cls;
-      const Ty = Resolve(TypeOfExpr(Q.Src, ts_node_child(Q.Up, 0), Cls, Q.FileIdx, Q.Locals));
-      var Info: TTypeInfo;
-      if (Ty = '') or not Types.TryGetValue(Key(Ty), Info) or not Info.IsIntf then
-        Exit;
-      const Intf = Key(Ty);
-      const M = Q.Name;
-      var DI := DeclaringIntf(Intf, M);
-      if DI = '' then
-        Exit;
-      const Recv = Args(Ty);
-      const Wild: TList<string> = if (Cls <> '') and Types.ContainsKey(Cls) then Types[Cls].TParams else nil;
-      const Seen = TDictionary<string, Boolean>.Create;
-      try
-        for var C in Implementers(Intf) do
-        begin
-          if (Length(Recv) > 0) and not Reaches(C, Intf, Recv, Wild, 0) then
-            Continue;
-          var Owner, Method: string;
-          if not ImplementingMethod(C, DI, M, Owner, Method) and
-             not ImplementingMethod(C, Intf, M, Owner, Method) then
-            Continue;
-          const KeyS = Owner + '.' + Method;
-          if Seen.ContainsKey(KeyS) then
-            Continue;
-          Seen.Add(KeyS, True);
-          var T := Default(TImplTarget);
-          var P: TPlace;
-          if Impls.TryGetValue(KeyS, P) then
-          begin
-            T.Path := Paths[P.FileIdx];
-            T.Line := P.Line;
-            T.Name := P.Name;
-          end
-          else
-          begin
-            // declared, no body found (abstract, or a unit not indexed): its declaration
-            const OI = Types[Owner];
-            T.Path := Paths[OI.FileIdx];
-            if not OI.Methods.TryGetValue(Method, T.Line) then
-              T.Line := OI.Line;
-            T.Name := OI.Name + '.' + Method;
-          end;
-          Result := Result + [T];
-        end;
-      finally
-        Seen.Free;
-      end;
-    finally
-      Q.Free;
-    end;
-  finally
-    Lock.Leave;
-  end;
-end;
-
 { go to definition, go to type definition }
 
 function TargetOf(const Path: string; Line, Col: Integer; const Name: string): TImplTarget;
@@ -1343,6 +1295,174 @@ begin
       var T := Default(TImplTarget);
       if (Ty <> '') and NameTarget(Ty, T) then
         Result := [T];
+    finally
+      Q.Free;
+    end;
+  finally
+    Lock.Leave;
+  end;
+end;
+
+{ go to implementation }
+
+// a method's body: the class's, or (abstract, or a unit not indexed) its declaration
+function MethodTarget(const Owner, Method: string): TImplTarget;
+begin
+  Result := Default(TImplTarget);
+  var P: TPlace;
+  if Impls.TryGetValue(Owner + '.' + Method, P) then
+  begin
+    Result.Path := Paths[P.FileIdx];
+    Result.Line := P.Line;
+    Result.Name := P.Name;
+  end
+  else
+  begin
+    const OI = Types[Owner];
+    Result.Path := Paths[OI.FileIdx];
+    if not OI.Methods.TryGetValue(Method, Result.Line) then
+      Result.Line := OI.Line;
+    Result.Name := OI.Name + '.' + Method;
+  end;
+end;
+
+// the classes below C, by their first parent, each once (C not among them)
+function Descendants(const C: string): TList<string>;
+begin
+  const CacheKey = '>' + C;
+  if ImplCache.TryGetValue(CacheKey, Result) then
+    Exit;
+  Result := TList<string>.Create;
+  const Below = TDictionary<string, Boolean>.Create;
+  try
+    Below.Add(C, True);
+    var Changed: Boolean;
+    repeat
+      Changed := False;
+      for var Pair in Types do
+        if not Pair.Value.IsIntf and not Below.ContainsKey(Pair.Key) then
+        begin
+          const Up = ClassParent(Pair.Value);
+          if (Up <> '') and Below.ContainsKey(Up) then
+          begin
+            Below.Add(Pair.Key, True);
+            Result.Add(Pair.Key);
+            Changed := True;
+          end;
+        end;
+    until not Changed;
+  finally
+    Below.Free;
+  end;
+  ImplCache.Add(CacheKey, Result);
+end;
+
+// a call of M on a C: the method that runs for a C itself (its own or an ancestor's), and if
+// that one is virtual (or itself an override), each override below C. An abstract one is left
+// out when something overrides it. Overloads are one method, as everywhere here
+function ClassImplementations(const C, M: string): TArray<TImplTarget>;
+begin
+  Result := nil;
+  var Owner, Method: string;
+  if not ImplementingMethod(C, '', M, Owner, Method) then
+    Exit;
+  var D: Char;
+  if not Types[Owner].Dispatch.TryGetValue(Method, D) then
+    D := #0;
+  if D <> 'a' then
+    Result := [MethodTarget(Owner, Method)];
+  if D <> #0 then
+  begin
+    var Subs: TArray<TImplTarget> := nil;
+    for var Sub in Descendants(C) do
+    begin
+      var O: Char;
+      if Types[Sub].Dispatch.TryGetValue(M, O) and (O = 'o') then
+        Subs := Subs + [MethodTarget(Sub, M)];
+    end;
+    // by unit, then line: the order the units are read in, not a hash's
+    TArray.Sort<TImplTarget>(Subs, TComparer<TImplTarget>.Construct(
+      function(const A, B: TImplTarget): Integer
+      begin
+        Result := CompareText(ExtractFileName(A.Path), ExtractFileName(B.Path));
+        if Result = 0 then
+          Result := A.Line - B.Line;
+      end));
+    Result := Result + Subs;
+  end;
+  if (Result = nil) and (D = 'a') then
+    Result := [MethodTarget(Owner, Method)];   // abstract, overridden nowhere: its declaration
+end;
+
+// an interface method's: each class's method that implements it, of the classes that implement
+// the interface (with Recv, its arguments, those that implement it so)
+function InterfaceImplementations(const Intf, M: string; const Recv: TArray<string>;
+  const Wild: TList<string>): TArray<TImplTarget>;
+begin
+  Result := nil;
+  const DI = DeclaringIntf(Intf, M);
+  if DI = '' then
+    Exit;
+  const Seen = TDictionary<string, Boolean>.Create;
+  try
+    for var C in Implementers(Intf) do
+    begin
+      if (Length(Recv) > 0) and not Reaches(C, Intf, Recv, Wild, 0) then
+        Continue;
+      var Owner, Method: string;
+      if not ImplementingMethod(C, DI, M, Owner, Method) and
+         not ImplementingMethod(C, Intf, M, Owner, Method) then
+        Continue;
+      if Seen.ContainsKey(Owner + '.' + Method) then
+        Continue;
+      Seen.Add(Owner + '.' + Method, True);
+      Result := Result + [MethodTarget(Owner, Method)];
+    end;
+  finally
+    Seen.Free;
+  end;
+end;
+
+// x.M: on an interface, its implementing methods; on a class, the method and its overrides. And
+// with no x: M called in a method of the class (Self's), M's own declaration in a class's or
+// interface's body, or M in a method's heading, TFoo.M
+function Implementations(const Path, Text: string; Line, Character: Integer;
+  WaitMs: Cardinal): TArray<TImplTarget>;
+begin
+  Result := nil;
+  if Ready.WaitFor(WaitMs) <> wrSignaled then
+    Exit;
+  Lock.Enter;
+  try
+    const Q = TQuery.Create(Path, Text, Line, Character);
+    try
+      if not Q.Found then
+        Exit;
+      var TyKey := '';
+      var Recv: TArray<string> := nil;
+      if Q.IsMember then
+      begin
+        const Ty = Resolve(TypeOfExpr(Q.Src, ts_node_child(Q.Up, 0), Q.Cls, Q.FileIdx, Q.Locals));
+        if Ty <> '' then
+          TyKey := Key(Ty);
+        Recv := Args(Ty);
+      end
+      else
+      begin
+        var Body: string;
+        var T: TImplTarget;
+        if TypeBody(Q, Body) then
+          TyKey := Key(Body)          // a declaration: any arguments go
+        else if (KindOf(Q.Up) = 'genericDot') or ((Q.Cls <> '') and not LocalTarget(Q, Path, T)) then
+          TyKey := Q.Cls;             // TFoo.M's heading, or M on its own in a method of TFoo
+      end;
+      var Info: TTypeInfo;
+      if (TyKey = '') or not Types.TryGetValue(TyKey, Info) then
+        Exit;
+      if not Info.IsIntf then
+        Exit( ClassImplementations(TyKey, Q.Name) );
+      const Wild: TList<string> = if (Q.Cls <> '') and Types.ContainsKey(Q.Cls) then Types[Q.Cls].TParams else nil;
+      Result := InterfaceImplementations(TyKey, Q.Name, Recv, Wild);
     finally
       Q.Free;
     end;

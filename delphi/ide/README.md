@@ -21,8 +21,10 @@ rules do, as you type, as Zed does.
 
 **Go to implementation**, in any Delphi file, `.pas` too: Ctrl+click on `x.DoSomething()` goes to
 the interface; **Ctrl+Shift+click** goes to the classes' methods that implement
-it, or right-click and choose **Go to Implementation**. One goes straight there; more show a menu
-to choose from. Beside it on the right-click menu:
+it, or right-click and choose **Go to Implementation**. On a class's method it goes to the
+method that runs, and if that's virtual, to each override below it: `TryMoveNext` in
+Spring4D's `TIterator<T>` (abstract) offers its 40 overrides. One goes straight there; more show
+a menu to choose from. Beside it on the right-click menu:
 
 - **Find Declaration (delphipp)**: where the name is declared, when the IDE's own Find Declaration
   can't tell (a unit opened with no project, say).

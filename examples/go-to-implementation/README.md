@@ -15,6 +15,9 @@ Open `GoToImpl.dpr` here. In `Shapes.pas`, at the end:
 | `Service.Value;` (a property) | `TBase.Value`, `TOther.Value` |
 | `CreateMyObject.DoSomething;` (a function's result) | the same three as `x.DoSomething()` |
 | `FKids.DoSomething;` (an `IChild`, which no class implements) | nothing: the menu says so |
+| `procedure TBase.DoSomething;` (a virtual method's heading) | `TBase.DoSomething`, `TDerived.DoSomething` (its override) |
+| `procedure DoSomething; virtual;` in `TBase` | the same two |
+| `function TBase.Value` (not virtual) | `TBase.Value` alone |
 
 **Find References (delphipp)**, on the same menu, lists every use in the Messages view. Here, on
 `DoSomething` in `IMyInterface`: the declaration, `x.DoSomething()` in `Use`, and in `Fields.pas`
