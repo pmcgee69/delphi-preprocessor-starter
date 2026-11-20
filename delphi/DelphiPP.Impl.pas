@@ -22,12 +22,16 @@ unit DelphiPP.Impl;
 
 interface
 
+uses
+  System.SysUtils;
+
 type
   TImplTarget = record
     Path: string;
     Line: Integer;                    // from 1: the body's first line
-    Name: string;                     // TClass.Method as its heading writes it
+    Name: string;                     // TClass.Method as its heading writes it; a reference's line
     Col: Integer;                     // from 0: where the name is (0 for an implementation)
+    Len: Integer;                     // the name's length, for a reference's range (0: a point)
   end;
 
 // start indexing the folder's units in the background (again: a fresh index)
@@ -55,10 +59,17 @@ function Definitions(const Path, Text: string; Line, Character: Integer;
 function TypeDefinitions(const Path, Text: string; Line, Character: Integer;
   WaitMs: Cardinal = 30000): TArray<TImplTarget>;
 
+// every use of the name at Line, Character across the index: each identifier of that name whose
+// definition (as Definitions finds it) is the same place; the declaration itself too if
+// IncludeDeclaration. TextOf gives an editor's text for a file it has open ('' for none: the
+// file as saved); the file at Path is Text
+function References(const Path, Text: string; Line, Character: Integer; IncludeDeclaration: Boolean;
+  const TextOf: TFunc<string, string> = nil; WaitMs: Cardinal = 30000): TArray<TImplTarget>;
+
 implementation
 
 uses
-  System.SysUtils, System.Classes, System.IOUtils, System.SyncObjs, System.Generics.Collections,
+  System.Classes, System.IOUtils, System.SyncObjs, System.Generics.Collections,
   TreeSitter.Api;
 
 type
@@ -871,27 +882,43 @@ type
     Cls: string;                      // the class of the method around the cursor, by Key
     Locals: TLocals;
     FileIdx: Integer;
-    constructor Create(const Path, Text: string; Line, Character: Integer);
+    constructor Create(const Path, Text: string; Line, Character: Integer);  // parsed, and at Line, Character
+    constructor CreateParsed(const Path, Text: string);
     destructor Destroy; override;
+    procedure Seek(Line, Col: UInt32);  // to the name at Line, Col (from 0; Col in bytes)
     function Up: TSNode;              // N's parent
     function IsMember: Boolean;       // N is M in x.M
     function Name: string;            // N's text, lower case
   end;
 
-constructor TQuery.Create(const Path, Text: string; Line, Character: Integer);
+constructor TQuery.CreateParsed(const Path, Text: string);
 begin
   Chain := TList<TSNode>.Create;
   Locals := TLocals.Create;
   FileIdx := FileIndexOf(Path);
   Src := Bytes(Text);
+  Parser := ts_parser_new;
+  ts_parser_set_language(Parser, tree_sitter_delphi13);
+  Tree := ts_parser_parse_string(Parser, nil, PByte(Src), Length(Src));
+end;
+
+constructor TQuery.Create(const Path, Text: string; Line, Character: Integer);
+begin
+  CreateParsed(Path, Text);
   const Lines = Text.Replace(#13#10, #10).Replace(#13, #10).Split([#10]);
   if (Line < 0) or (Line > High(Lines)) then
     Exit;
   // LSP's UTF-16 column, as a byte column of the line
-  const Col = TEncoding.UTF8.GetByteCount(Lines[Line].Substring(0, Character));
-  Parser := ts_parser_new;
-  ts_parser_set_language(Parser, tree_sitter_delphi13);
-  Tree := ts_parser_parse_string(Parser, nil, PByte(Src), Length(Src));
+  Seek(Line, TEncoding.UTF8.GetByteCount(Lines[Line].Substring(0, Character)));
+end;
+
+procedure TQuery.Seek(Line, Col: UInt32);
+begin
+  Chain.Clear;
+  for var D in Locals do
+    D.Free;
+  Locals.Clear;
+  Cls := '';
   // down from the root to the identifier under the cursor, keeping the way
   N := ts_tree_root_node(Tree);
   while True do
@@ -902,8 +929,8 @@ begin
     begin
       const S = ts_node_start_point(C);
       const E = ts_node_end_point(C);
-      if ((S.Row < UInt32(Line)) or ((S.Row = UInt32(Line)) and (S.Column <= UInt32(Col)))) and
-         ((E.Row > UInt32(Line)) or ((E.Row = UInt32(Line)) and (E.Column >= UInt32(Col)))) then
+      if ((S.Row < Line) or ((S.Row = Line) and (S.Column <= Col))) and
+         ((E.Row > Line) or ((E.Row = Line) and (E.Column >= Col))) then
       begin
         Next := C;
         if KindOf(C) = 'identifier' then
@@ -1212,6 +1239,64 @@ begin
     T := NodeTarget(Path, Q.Src, R);
 end;
 
+// the cursor on a member's own declaration, in a class's or interface's body: that member
+function DeclaredHere(Q: TQuery; const Path: string; out T: TImplTarget): Boolean;
+begin
+  for var I := Q.Chain.Count - 1 downto 0 do
+  begin
+    const K = KindOf(Q.Chain[I]);
+    if K = 'defProc' then
+      Exit( False );
+    if K = 'declType' then
+    begin
+      for var C in Kids(Q.Chain[I]) do
+        if (KindOf(C) = 'identifier') or (KindOf(C) = 'genericTpl') then
+        begin
+          Result := MemberTarget(Txt(Q.Src, C), Q.Name, T) and SameText(T.Path, Path) and
+                    (T.Line = LineOf(Q.N)) and (T.Col = Integer(ts_node_start_point(Q.N).Column));
+          Exit;
+        end;
+      Exit( False );
+    end;
+  end;
+  Result := False;
+end;
+
+// where the name at the query's cursor is declared (the index's lock held)
+function DefinitionAt(Q: TQuery; const Path: string; out T: TImplTarget): Boolean;
+begin
+  T := Default(TImplTarget);
+  if not Q.Found then
+    Exit( False );
+  if Q.IsMember then
+  begin
+    // x.M: M of x's type; or of a type named, as TCollections.CreateList
+    const L = ts_node_child(Q.Up, 0);
+    var Ty := TypeOfExpr(Q.Src, L, Q.Cls, Q.FileIdx, Q.Locals);
+    var Info: TTypeInfo;
+    if (Ty = '') and FindType(Txt(Q.Src, L), Info) then
+      Ty := Txt(Q.Src, L);
+    Exit( MemberTarget(Ty, Q.Name, T) );
+  end;
+  if KindOf(Q.Up) = 'genericDot' then
+  begin
+    // TFoo.Bar, as a method's heading writes it: Bar of TFoo (a unit's name before TFoo
+    // isn't a type: the name alone, below)
+    var Prev := '';
+    for var C in Kids(Q.Up) do
+    begin
+      if C.id = Q.N.id then
+        Break;
+      if KindOf(C) <> '.' then
+        Prev := Txt(Q.Src, C);
+    end;
+    if (Prev <> '') and MemberTarget(Prev, Q.Name, T) then
+      Exit( True );
+  end;
+  Result := DeclaredHere(Q, Path, T) or LocalTarget(Q, Path, T) or MemberTarget(Q.Cls, Q.Name, T) or
+            UnitTarget(Q, Path, T) or NameTarget(Q.Name, T);
+end;
+
 function Definitions(const Path, Text: string; Line, Character: Integer;
   WaitMs: Cardinal): TArray<TImplTarget>;
 begin
@@ -1222,41 +1307,8 @@ begin
   try
     const Q = TQuery.Create(Path, Text, Line, Character);
     try
-      if not Q.Found then
-        Exit;
-      var T := Default(TImplTarget);
-      if Q.IsMember then
-      begin
-        // x.M: M of x's type; or of a type named, as TCollections.CreateList
-        const L = ts_node_child(Q.Up, 0);
-        var Ty := TypeOfExpr(Q.Src, L, Q.Cls, Q.FileIdx, Q.Locals);
-        var Info: TTypeInfo;
-        if (Ty = '') and FindType(Txt(Q.Src, L), Info) then
-          Ty := Txt(Q.Src, L);
-        if MemberTarget(Ty, Q.Name, T) then
-          Result := [T];
-        Exit;
-      end;
-      if KindOf(Q.Up) = 'genericDot' then
-      begin
-        // TFoo.Bar, as a method's heading writes it: Bar of TFoo (a unit's name before TFoo
-        // isn't a type: the name alone, below)
-        var Prev := '';
-        for var C in Kids(Q.Up) do
-        begin
-          if C.id = Q.N.id then
-            Break;
-          if KindOf(C) <> '.' then
-            Prev := Txt(Q.Src, C);
-        end;
-        if (Prev <> '') and MemberTarget(Prev, Q.Name, T) then
-        begin
-          Result := [T];
-          Exit;
-        end;
-      end;
-      if LocalTarget(Q, Path, T) or MemberTarget(Q.Cls, Q.Name, T) or UnitTarget(Q, Path, T) or
-         NameTarget(Q.Name, T) then
+      var T: TImplTarget;
+      if DefinitionAt(Q, Path, T) then
         Result := [T];
     finally
       Q.Free;
@@ -1287,6 +1339,116 @@ begin
         Result := [T];
     finally
       Q.Free;
+    end;
+  finally
+    Lock.Leave;
+  end;
+end;
+
+{ find references }
+
+function References(const Path, Text: string; Line, Character: Integer; IncludeDeclaration: Boolean;
+  const TextOf: TFunc<string, string>; WaitMs: Cardinal): TArray<TImplTarget>;
+var
+  Name: string;
+  Size: UInt32;
+  Hits: TList<TSNode>;
+
+  // every identifier of the name, by its bytes' length first
+  procedure Collect(const Src: TBytesA; const X: TSNode);
+  begin
+    const C = ts_node_child_count(X);
+    if C = 0 then
+    begin
+      if (ts_node_end_byte(X) - ts_node_start_byte(X) = Size) and (KindOf(X) = 'identifier') and
+         (Txt(Src, X).ToLower = Name) then
+        Hits.Add(X);
+      Exit;
+    end;
+    for var I := 0 to C - 1 do
+      Collect(Src, ts_node_child(X, I));
+  end;
+
+begin
+  Result := nil;
+  if Ready.WaitFor(WaitMs) <> wrSignaled then
+    Exit;
+  Lock.Enter;
+  try
+    var Goal: TImplTarget;
+    const Q = TQuery.Create(Path, Text, Line, Character);
+    try
+      if not DefinitionAt(Q, Path, Goal) then
+        Exit;
+      Name := Q.Name;
+    finally
+      Q.Free;
+    end;
+    Size := TEncoding.UTF8.GetByteCount(Name);
+    var Files := Paths.ToArray;
+    if FileIndexOf(Path) < 0 then
+      Files := Files + [Path];        // a file outside the index: its own uses
+    var GotGoal := False;
+    Hits := TList<TSNode>.Create;
+    try
+      for var F in Files do
+      begin
+        if Stopping then
+          Break;
+        var S := '';
+        if SameText(F, Path) then
+          S := Text
+        else
+        begin
+          if Assigned(TextOf) then
+            S := TextOf(F);
+          if S = '' then
+          try
+            S := TextOfFile(F);
+          except
+            Continue;
+          end;
+        end;
+        if S.ToLower.IndexOf(Name) < 0 then
+          Continue;                   // not even the letters: not parsed
+        const Lines = S.Replace(#13#10, #10).Replace(#13, #10).Split([#10]);
+        const R = TQuery.CreateParsed(F, S);
+        try
+          Hits.Clear;
+          Collect(R.Src, ts_tree_root_node(R.Tree));
+          for var X in Hits do
+          begin
+            const P = ts_node_start_point(X);
+            R.Seek(P.Row, P.Column);
+            var T: TImplTarget;
+            if not DefinitionAt(R, F, T) or not SameText(T.Path, Goal.Path) or
+               (T.Line <> Goal.Line) or (T.Col <> Goal.Col) then
+              Continue;
+            const IsGoal = SameText(F, Goal.Path) and (Integer(P.Row) + 1 = Goal.Line) and
+                           (Integer(P.Column) = Goal.Col);
+            if IsGoal then
+            begin
+              GotGoal := True;
+              if not IncludeDeclaration then
+                Continue;
+            end;
+            var U := TargetOf(F, P.Row + 1, P.Column, '');
+            if Integer(P.Row) <= High(Lines) then
+              U.Name := Lines[P.Row].Trim;
+            U.Len := Length(Txt(R.Src, X));
+            Result := Result + [U];
+          end;
+        finally
+          R.Free;
+        end;
+      end;
+    finally
+      Hits.Free;
+    end;
+    if IncludeDeclaration and not GotGoal then
+    begin
+      Goal.Len := Length(Name);
+      Result := [Goal] + Result;      // declared where no identifier of its own shows it
     end;
   finally
     Lock.Leave;

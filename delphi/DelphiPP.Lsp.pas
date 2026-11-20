@@ -495,7 +495,10 @@ begin
   P.When := GetTickCount64;
   FLock.Enter;
   try
-    FPending.AddOrSetValue(Uri, P);
+    // the rules only on .dpps, the preprocessor's own files; a .pas gets navigation alone
+    // (the user, 21 Nov: "prob just dpps for now")
+    if SameText(ExtractFileExt(PathOf(Uri)), '.dpps') then
+      FPending.AddOrSetValue(Uri, P);
     FTexts.AddOrSetValue(Uri, Text);
   finally
     FLock.Leave;
@@ -654,15 +657,47 @@ begin
   const Path = PathOf(Uri);
   if (Text = '') and FileExists(Path) then
     Text := TFile.ReadAllText(Path);
-  for var T in Find(Path, Text, Params.GetValue<Integer>('position.line'),
-                    Params.GetValue<Integer>('position.character'), 30000) do
+  const Line = Params.GetValue<Integer>('position.line');
+  const Character = Params.GetValue<Integer>('position.character');
+  var Targets: TArray<TImplTarget>;
+  if Assigned(Find) then
+    Targets := Find(Path, Text, Line, Character, 30000)
+  else
+  begin
+    // textDocument/references: the other files open in the editor as it has them
+    var Open := TDictionary<string, string>.Create;
+    FLock.Enter;
+    try
+      for var Pair in FTexts do
+        Open.AddOrSetValue(PathOf(Pair.Key).ToLower, Pair.Value);
+    finally
+      FLock.Leave;
+    end;
+    try
+      var Decl := False;
+      if Params.GetValue('context') is TJSONObject then
+        Params.TryGetValue<Boolean>('context.includeDeclaration', Decl);
+      Targets := References(Path, Text, Line, Character, Decl,
+        function(P: string): string
+        begin
+          if not Open.TryGetValue(P.ToLower, Result) then
+            Result := '';
+        end, 30000);
+    finally
+      Open.Free;
+    end;
+  end;
+  for var T in Targets do
   begin
     var At := TJSONObject.Create;
     At.AddPair('line', Num(T.Line - 1));
     At.AddPair('character', Num(T.Col));
+    var Upto := TJSONObject.Create;
+    Upto.AddPair('line', Num(T.Line - 1));
+    Upto.AddPair('character', Num(T.Col + T.Len));
     var Range := TJSONObject.Create;
     Range.AddPair('start', At);
-    Range.AddPair('end', TJSONValue(At.Clone));
+    Range.AddPair('end', Upto);
     var L := TJSONObject.Create;
     L.AddPair('uri', UriOf(T.Path));
     L.AddPair('range', Range);
@@ -702,6 +737,7 @@ begin
     Caps.AddPair('definitionProvider', TJSONBool.Create(True));
     Caps.AddPair('declarationProvider', TJSONBool.Create(True));
     Caps.AddPair('typeDefinitionProvider', TJSONBool.Create(True));
+    Caps.AddPair('referencesProvider', TJSONBool.Create(True));
     // the workspace's units, indexed in the background for go to implementation
     var Root := '';
     if Params.GetValue('rootUri') is TJSONString then
@@ -752,6 +788,8 @@ begin
     Reply(Id, LocationsAt(Params, Definitions))
   else if Method = 'textDocument/typeDefinition' then
     Reply(Id, LocationsAt(Params, TypeDefinitions))
+  else if Method = 'textDocument/references' then
+    Reply(Id, LocationsAt(Params, nil))
   else if Id <> nil then
   begin
     var Err := TJSONObject.Create;
