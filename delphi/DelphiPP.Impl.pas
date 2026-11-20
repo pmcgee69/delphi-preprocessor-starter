@@ -66,6 +66,7 @@ type
 
   TPos = record
     Line, Col: Integer;               // from 1, from 0
+    Name: string;                     // as written
   end;
 
   TTypeInfo = class
@@ -284,10 +285,11 @@ end;
 
 { the index }
 
-function PosOf(const N: TSNode): TPos;
+function PosOf(const Src: TBytesA; const N: TSNode): TPos;
 begin
   Result.Line := LineOf(N);
   Result.Col  := ts_node_start_point(N).Column;
+  Result.Name := Txt(Src, N);
 end;
 
 // a unit-level name (Key: no generic arguments, no unit), the first unit's
@@ -316,7 +318,7 @@ begin
         if KindOf(D) = 'identifier' then
         begin
           Info.Members.AddOrSetValue(Txt(Src, D).ToLower, Ty);
-          Info.Places.TryAdd(Txt(Src, D).ToLower, PosOf(D));
+          Info.Places.TryAdd(Txt(Src, D).ToLower, PosOf(Src, D));
           if K = 'declProp' then
             Break;
         end
@@ -346,7 +348,7 @@ begin
         Continue;
       end;
       Info.Methods.AddOrSetValue(Txt(Src, Name).ToLower, LineOf(C));
-      Info.Places.TryAdd(Txt(Src, Name).ToLower, PosOf(Name));
+      Info.Places.TryAdd(Txt(Src, Name).ToLower, PosOf(Src, Name));
       const T = FirstOf(C, 'typeref');
       if not IsNull(T) then
         Info.Results.AddOrSetValue(Txt(Src, Name).ToLower, Full(Txt(Src, T)));
@@ -975,7 +977,7 @@ begin
   var P: TPos;
   if Info.Places.TryGetValue(M, P) then
   begin
-    T := TargetOf(Paths[Info.FileIdx], P.Line, P.Col, Info.Name + '.' + M);
+    T := TargetOf(Paths[Info.FileIdx], P.Line, P.Col, Info.Name + '.' + P.Name);
     Exit( True );
   end;
   if not Info.IsIntf then

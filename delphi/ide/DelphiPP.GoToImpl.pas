@@ -32,6 +32,8 @@ const
   MenuCategory = 'DelphiPP.GoToImplementation';
 
 type
+  TAskKind = (akImplementation, akDeclaration);
+
   TGoToImpl = class(TNTACodeEditorNotifier)
   private
     FMenu    : TPopupMenu;
@@ -44,11 +46,12 @@ type
     procedure OnMouseUp(const Editor: TWinControl; Button: TMouseButton; Shift: TShiftState;
       X, Y: Integer; var Handled: Boolean);
     procedure OnExecute(Sender: TObject);
+    procedure OnFindDeclaration(Sender: TObject);
     procedure OnUpdate(Sender: TObject);
     procedure OnItem(Sender: TObject);
     procedure EnsureIndex(const FileName: string);
-    procedure Ask(const View: IOTAEditView; Pos: TOTAEditPos; const At: TPoint);
-    procedure ShowMenu(const At: TPoint);
+    procedure Ask(const View: IOTAEditView; Pos: TOTAEditPos; const At: TPoint; Kind: TAskKind);
+    procedure ShowMenu(const At: TPoint; const Notes: TArray<string>);
   protected
     function AllowedEvents: TCodeEditorEvents; override;
   public
@@ -104,31 +107,10 @@ begin
   end;
 end;
 
-// the active project's folder (Deep) and search path (Flat); '' when there is no project
-function ProjectFolders(out Deep, Flat: TArray<string>): string;
+// each folder of a search path (';' between), relative ones from Dir, macros expanded
+function PathFolders(const Search, Dir, Plat, Conf: string): TArray<string>;
 begin
-  Deep := nil;
-  Flat := nil;
-  const Project = GetActiveProject;
-  if Project = nil then
-    Exit( '' );
-  const Dir = ExtractFilePath(Project.FileName);
-  Deep := [Dir];
-  var Search := '';
-  var Plat := '';
-  var Conf := '';
-  try
-    const Configs = Project.ProjectOptions as IOTAProjectOptionsConfigurations;
-    Plat := Configs.ActivePlatformName;
-    Conf := Configs.ActiveConfigurationName;
-    var C := Configs.ActiveConfiguration;
-    if (C <> nil) and (Plat <> '') and (C.PlatformConfiguration[Plat] <> nil) then
-      C := C.PlatformConfiguration[Plat];
-    if C <> nil then
-      Search := C.GetValue(sUnitSearchPath, True);
-  except
-    // the folder alone
-  end;
+  Result := nil;
   for var E in Search.Split([';']) do
   begin
     var S := Expand(E.Trim, Plat, Conf);
@@ -137,12 +119,95 @@ begin
     try
       if TPath.IsRelativePath(S) then
         S := TPath.Combine(Dir, S);
-      Flat := Flat + [ExcludeTrailingPathDelimiter(TPath.GetFullPath(S))];
+      Result := Result + [ExcludeTrailingPathDelimiter(TPath.GetFullPath(S))];
     except
       // not a path
     end;
   end;
-  Result := Project.FileName + '|' + string.Join(';', Flat);
+end;
+
+// the repository a file is in: the nearest folder above it with .git (or .hg, .svn); else the
+// file's own folder. A unit opened on its own, with no project (user, 20 Nov: Spring4D's
+// Spring.Container.Builder.pas in Delphi 13, "No implementation found (16 units read)": its
+// folder alone, not Spring.Collections, where IList<T> is)
+function RepoRoot(const FileName: string): string;
+begin
+  Result := ExtractFileDir(FileName);
+  var D := Result;
+  for var I := 1 to 32 do
+  begin
+    if DirectoryExists(TPath.Combine(D, '.git')) or FileExists(TPath.Combine(D, '.git')) or
+       DirectoryExists(TPath.Combine(D, '.hg')) or DirectoryExists(TPath.Combine(D, '.svn')) then
+      Exit( D );
+    const Up = ExtractFileDir(D);
+    if (Up = '') or (Up = D) then
+      Break;
+    D := Up;
+  end;
+end;
+
+// the IDE's library path for a platform (Tools > Options > Language > Delphi > Library): where a
+// library installed for every project is, as Spring4D often is
+function LibraryPath(const Plat: string): string;
+begin
+  Result := '';
+  try
+    const Base = (BorlandIDEServices as IOTAServices).GetBaseRegistryKey;
+    var Key: HKEY;
+    if RegOpenKeyEx(HKEY_CURRENT_USER, PChar(Base + '\Library\' + Plat), 0, KEY_READ, Key) <> ERROR_SUCCESS then
+      Exit;
+    try
+      var Size: DWORD := 0;
+      var Kind: DWORD := 0;
+      if (RegQueryValueEx(Key, 'Search Path', nil, @Kind, nil, @Size) = ERROR_SUCCESS) and (Size > 0) then
+      begin
+        SetLength(Result, Size div SizeOf(Char));
+        if RegQueryValueEx(Key, 'Search Path', nil, @Kind, PByte(PChar(Result)), @Size) = ERROR_SUCCESS then
+          Result := PChar(Result)
+        else
+          Result := '';
+      end;
+    finally
+      RegCloseKey(Key);
+    end;
+  except
+    Result := '';
+  end;
+end;
+
+// what to index for a file: the active project's folder and the file's repository, with their
+// subfolders (Deep); the project's search path and the IDE's library path (Flat). The key: what
+// it was built from, to read it again when that changes
+function IndexScope(const FileName: string; out Deep, Flat: TArray<string>): string;
+begin
+  Deep := [RepoRoot(FileName)];
+  Flat := nil;
+  var Plat := {$IFDEF WIN64} 'Win64' {$ELSE} 'Win32' {$ENDIF};
+  var Conf := 'Debug';
+  const Project = GetActiveProject;
+  if Project <> nil then
+  begin
+    const Dir = ExtractFilePath(Project.FileName);
+    if not SameText(ExcludeTrailingPathDelimiter(Dir), Deep[0]) then
+      Deep := Deep + [Dir];
+    var Search := '';
+    try
+      const Configs = Project.ProjectOptions as IOTAProjectOptionsConfigurations;
+      if Configs.ActivePlatformName <> '' then
+        Plat := Configs.ActivePlatformName;
+      Conf := Configs.ActiveConfigurationName;
+      var C := Configs.ActiveConfiguration;
+      if (C <> nil) and (C.PlatformConfiguration[Plat] <> nil) then
+        C := C.PlatformConfiguration[Plat];
+      if C <> nil then
+        Search := C.GetValue(sUnitSearchPath, True);
+    except
+      // the folders alone
+    end;
+    Flat := PathFolders(Search, Dir, Plat, Conf);
+  end;
+  Flat := Flat + PathFolders(LibraryPath(Plat), ExtractFilePath(FileName), Plat, Conf);
+  Result := string.Join(';', Deep) + '|' + string.Join(';', Flat);
 end;
 
 procedure GoToTarget(const T: TImplTarget);
@@ -153,10 +218,10 @@ begin
   if View = nil then
     Exit;
   var P: TOTAEditPos;
-  P.Col  := 1;
+  P.Col  := T.Col + 1;
   P.Line := T.Line;
   View.CursorPos := P;
-  View.Center(T.Line, 1);
+  View.Center(T.Line, P.Col);
   View.Paint;
 end;
 
@@ -167,6 +232,7 @@ begin
   inherited Create;
   FMenu    := TPopupMenu.Create(nil);
   FActions := TActionList.Create(nil);
+  FMenu.AutoHotkeys := maManual;      // no underlined letters added (user, 20 Nov, the first menu)
   const A  = TAction.Create(FActions);
   A.ActionList := FActions;
   A.Caption    := 'Go to Implementation';
@@ -174,6 +240,15 @@ begin
   A.Category   := MenuCategory;
   A.OnExecute  := OnExecute;
   A.OnUpdate   := OnUpdate;
+  // the IDE's own Find Declaration needs the project to know where each unit is (user, 20 Nov:
+  // "i think you are being generous to think the ide will find declaration")
+  const D  = TAction.Create(FActions);
+  D.ActionList := FActions;
+  D.Caption    := 'Find Declaration (delphipp)';
+  D.Hint       := 'Where this name is declared, from delphipp''s index';
+  D.Category   := MenuCategory;
+  D.OnExecute  := OnFindDeclaration;
+  D.OnUpdate   := OnUpdate;
   OnEditorMouseDownEx := OnMouseDown;
   OnEditorMouseUpEx   := OnMouseUp;
 end;
@@ -192,21 +267,17 @@ end;
 
 procedure TGoToImpl.EnsureIndex(const FileName: string);
 begin
+  if FileName = '' then
+    Exit;
   var Deep, Flat: TArray<string>;
-  var Key := ProjectFolders(Deep, Flat);
-  if Key = '' then
-  begin
-    // no project: the file's folder
-    Deep := [ExtractFilePath(FileName)];
-    Key  := '|' + Deep[0];
-  end;
+  const Key = IndexScope(FileName, Deep, Flat);
   if Key = FIndexKey then
     Exit;
   FIndexKey := Key;
   IndexFolders(Deep, Flat);
 end;
 
-procedure TGoToImpl.Ask(const View: IOTAEditView; Pos: TOTAEditPos; const At: TPoint);
+procedure TGoToImpl.Ask(const View: IOTAEditView; Pos: TOTAEditPos; const At: TPoint; Kind: TAskKind);
 begin
   FTargets := nil;
   if (View = nil) or (View.Buffer = nil) then
@@ -222,36 +293,51 @@ begin
     Exit;
   const LineBytes = TEncoding.UTF8.GetBytes(Lines[CP.Line - 1]);
   const Ch = Length(TEncoding.UTF8.GetString(LineBytes, 0, Min(Max(CP.CharIndex, 0), Length(LineBytes))));
+  var Notes: TArray<string> := nil;
   const Was = Screen.Cursor;
   Screen.Cursor := crHourGlass;
   try
     // the first time, the index is still being read: a second or so for Spring4D's 367 units
-    FTargets := Implementations(FileName, Text, CP.Line - 1, Ch, 20000);
+    if Kind = akDeclaration then
+    begin
+      FTargets := Definitions(FileName, Text, CP.Line - 1, Ch, 20000);
+      if FTargets = nil then
+        Notes := [Format('No declaration found (%d units read)', [IndexedCount])];
+    end
+    else
+    begin
+      FTargets := Implementations(FileName, Text, CP.Line - 1, Ch, 20000);
+      if FTargets = nil then
+      begin
+        // not a method called through an interface, or none implements it: its declaration
+        FTargets := Definitions(FileName, Text, CP.Line - 1, Ch, 0);
+        Notes := [Format('No implementation found (%d units read)', [IndexedCount])];
+        if FTargets <> nil then
+          Notes := Notes + ['Its declaration:'];
+      end;
+    end;
   finally
     Screen.Cursor := Was;
   end;
-  if Length(FTargets) = 1 then
+  if (Length(FTargets) = 1) and (Notes = nil) then
     GoToTarget(FTargets[0])
   else
-    ShowMenu(At);
+    ShowMenu(At, Notes);
 end;
 
-procedure TGoToImpl.ShowMenu(const At: TPoint);
+procedure TGoToImpl.ShowMenu(const At: TPoint; const Notes: TArray<string>);
 begin
   FMenu.Items.Clear;
-  if FTargets = nil then
+  // a note is an item that does nothing: enabled, so it reads as text, not greyed (user, 20 Nov:
+  // "text could be white")
+  for var S in Notes do
   begin
     const Item = TMenuItem.Create(FMenu);
-    Item.Caption := Format('No implementation found (%d units read)', [IndexedCount]);
-    Item.Enabled := False;
+    Item.Caption := S.Replace('&', '&&');
+    Item.Tag     := -1;
     FMenu.Items.Add(Item);
-    const Why = TMenuItem.Create(FMenu);
-    Why.Caption := 'Put the cursor on a method called through an interface: x.DoSomething';
-    Why.Enabled := False;
-    FMenu.Items.Add(Why);
-  end
-  else
-    for var I := 0 to High(FTargets) do
+  end;
+  for var I := 0 to High(FTargets) do
     begin
       const Item = TMenuItem.Create(FMenu);
       // after a tab, right-aligned as a shortcut is
@@ -305,7 +391,7 @@ begin
       procedure
       begin
         try
-          Ask(View, P, At);
+          Ask(View, P, At, akImplementation);
         except
         end;
       end);
@@ -337,7 +423,17 @@ begin
   try
     const View = (BorlandIDEServices as IOTAEditorServices).TopView;
     if View <> nil then
-      Ask(View, View.CursorPos, Mouse.CursorPos);
+      Ask(View, View.CursorPos, Mouse.CursorPos, akImplementation);
+  except
+  end;
+end;
+
+procedure TGoToImpl.OnFindDeclaration(Sender: TObject);
+begin
+  try
+    const View = (BorlandIDEServices as IOTAEditorServices).TopView;
+    if View <> nil then
+      Ask(View, View.CursorPos, Mouse.CursorPos, akDeclaration);
   except
   end;
 end;
