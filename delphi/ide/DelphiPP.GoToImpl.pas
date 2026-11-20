@@ -32,15 +32,17 @@ uses
 const
   MenuCategory = 'DelphiPP.GoToImplementation';
   DeclCategory = 'DelphiPP.FindDeclaration';
+  TypeCategory = 'DelphiPP.GoToTypeDefinition';
 
 type
-  TAskKind = (akImplementation, akDeclaration);
+  TAskKind = (akImplementation, akDeclaration, akTypeDefinition);
 
   TGoToImpl = class(TNTACodeEditorNotifier)
   private
     FMenu    : TPopupMenu;
     FActions : TActionList;
     FDeclActions: TActionList;
+    FTypeActions: TActionList;
     FTargets : TArray<TImplTarget>;
     FIndexKey: string;                // what the index was built from: the project and its path
     FTaken   : Boolean;               // a Ctrl+Shift or Ctrl+Alt mouse-down taken: its mouse-up too
@@ -76,6 +78,8 @@ type
     procedure OnFindDeclaration(Sender: TObject);
     procedure OnUpdateImplementation(Sender: TObject);
     procedure OnUpdateDeclaration(Sender: TObject);
+    procedure OnTypeDefinition(Sender: TObject);
+    procedure OnUpdateTypeDefinition(Sender: TObject);
     procedure UpdateFor(A: TAction; Kind: TAskKind);
     procedure OnItem(Sender: TObject);
     procedure EnsureIndex(const FileName: string);
@@ -96,6 +100,7 @@ var
   NotifierIndex: Integer = -1;
   MenuAdded: Boolean;
   DeclAdded: Boolean;
+  TypeAdded: Boolean;
 
 // the buffer's text: the editor gives it as UTF-8
 function BufferText(const Buffer: IOTAEditBuffer): TBytes;
@@ -395,6 +400,16 @@ begin
   D.Category   := DeclCategory;
   D.OnExecute  := OnFindDeclaration;
   D.OnUpdate   := OnUpdateDeclaration;
+  // where the name's type is declared: IList<T> for fInspectors (user, 20 Nov: "can we have goto
+  // type definition for the ide?")
+  FTypeActions := TActionList.Create(nil);
+  const Y  = TAction.Create(FTypeActions);
+  Y.ActionList := FTypeActions;
+  Y.Caption    := 'Go to Type Definition (delphipp)';
+  Y.Hint       := 'Where this name''s type is declared, from delphipp''s index';
+  Y.Category   := TypeCategory;
+  Y.OnExecute  := OnTypeDefinition;
+  Y.OnUpdate   := OnUpdateTypeDefinition;
   FHint  := TCodeHint.Create(nil);
   FHover := TTimer.Create(nil);
   FHover.Enabled := False;
@@ -410,6 +425,7 @@ begin
   FHover.Free;
   FHint.Free;
   FWait.Free;
+  FTypeActions.Free;
   FDeclActions.Free;
   FActions.Free;
   FMenu.Free;
@@ -593,10 +609,12 @@ begin
     Exit;
   const LineBytes = TEncoding.UTF8.GetBytes(Lines[CP.Line - 1]);
   const Ch = Length(TEncoding.UTF8.GetString(LineBytes, 0, Min(Max(CP.CharIndex, 0), Length(LineBytes))));
-  if Kind = akDeclaration then
-    Result := Definitions(FileName, Text, CP.Line - 1, Ch, WaitMs)
+  case Kind of
+    akDeclaration:    Result := Definitions(FileName, Text, CP.Line - 1, Ch, WaitMs);
+    akTypeDefinition: Result := TypeDefinitions(FileName, Text, CP.Line - 1, Ch, WaitMs);
   else
     Result := Implementations(FileName, Text, CP.Line - 1, Ch, WaitMs);
+  end;
 end;
 
 procedure TGoToImpl.Ask(const View: IOTAEditView; Pos: TOTAEditPos; const At: TPoint; Kind: TAskKind);
@@ -616,6 +634,8 @@ begin
     begin
       if Kind = akDeclaration then
         FMessage := Format('No declaration found (%d units read)', [IndexedCount])
+      else if Kind = akTypeDefinition then
+        FMessage := Format('No type found (%d units read)', [IndexedCount])
       else
       begin
         // not a method called through an interface, or none implements it: its declaration, as
@@ -847,6 +867,25 @@ begin
   end;
 end;
 
+procedure TGoToImpl.OnTypeDefinition(Sender: TObject);
+begin
+  try
+    const View = (BorlandIDEServices as IOTAEditorServices).TopView;
+    if View <> nil then
+    begin
+      FAltHeld := False;
+      FFromMenu := True;
+      Ask(View, View.CursorPos, CaretPoint(View), akTypeDefinition);
+    end;
+  except
+  end;
+end;
+
+procedure TGoToImpl.OnUpdateTypeDefinition(Sender: TObject);
+begin
+  UpdateFor(Sender as TAction, akTypeDefinition);
+end;
+
 { Register }
 
 procedure Register;
@@ -859,6 +898,8 @@ begin
     MenuAdded := True;
     Menu.RegisterActionList(Notifier.FDeclActions, DeclCategory, cEdMenuCatIdentifier);
     DeclAdded := True;
+    Menu.RegisterActionList(Notifier.FTypeActions, TypeCategory, cEdMenuCatIdentifier);
+    TypeAdded := True;
   except
     // Ctrl+Alt+click alone
   end;
@@ -886,6 +927,11 @@ finalization
   if DeclAdded then
   try
     (BorlandIDEServices as IOTAEditorServices).GetEditorLocalMenu.UnregisterActionList(DeclCategory);
+  except
+  end;
+  if TypeAdded then
+  try
+    (BorlandIDEServices as IOTAEditorServices).GetEditorLocalMenu.UnregisterActionList(TypeCategory);
   except
   end;
   if NotifierIndex >= 0 then

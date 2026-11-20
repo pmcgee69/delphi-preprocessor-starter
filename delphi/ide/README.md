@@ -20,11 +20,24 @@ rules do, as you type, as Zed does.
   isn't needed.
 
 **Go to implementation**, in any Delphi file, `.pas` too: Ctrl+click on `x.DoSomething()` goes to
-the interface; **Ctrl+Shift+click** (or Ctrl+Alt+click) goes to the classes' methods that implement it, or right-click
-and choose **Go to Implementation**, below Find Declaration. One goes straight there; more show a
-menu to choose from. It reads the active project's units (its folder and its search path) in the
-background: `DelphiPP.GoToImpl.pas`, with the index `..\DelphiPP.Impl.pas` that delphipp's
-language server uses for Zed. To try it: [`examples\go-to-implementation`](../../examples/go-to-implementation/).
+the interface; **Ctrl+Shift+click** (or Ctrl+Alt+click) goes to the classes' methods that implement
+it, or right-click and choose **Go to Implementation**. One goes straight there; more show a menu
+to choose from. Beside it on the right-click menu:
+
+- **Find Declaration (delphipp)**: where the name is declared, when the IDE's own Find Declaration
+  can't tell (a unit opened with no project, say).
+- **Go to Type Definition (delphipp)**: where its type is declared: `IList<T>` for a field
+  `fInspectors: IList<IBuilderInspector>`.
+
+Each is greyed when there's nothing to go to. Each jump goes in the IDE's history, so its back and
+forward arrows return to where you were. Resting the mouse on a name shows its declaration's line
+and where it is (not in a `.dpps` file, which has the rules' hovers).
+
+It reads the active project's units in the background: its folder and below, its search path, the
+IDE's library path, and with no project, the file's repository. `DelphiPP.GoToImpl.pas`, with the
+index `..\DelphiPP.Impl.pas` that delphipp's language server uses for Zed (there, Go to
+Implementation, Definition, Declaration and Type Definition). To try it:
+[`examples\go-to-implementation`](../../examples/go-to-implementation/).
 
 The rules run inside the IDE, on the editor's text, each time it changes: the Delphi engine and
 rules (`..\DelphiPP.Engine.pas`, `..\DelphiPP.Rules.pas`), and the same ones the pre-build event
