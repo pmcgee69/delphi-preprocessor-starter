@@ -24,7 +24,7 @@ implementation
 
 uses
   Winapi.Windows, System.SysUtils, System.Classes, System.Types, System.Math, System.IOUtils,
-  Vcl.Controls, Vcl.Menus, Vcl.ActnList, Vcl.Forms,
+  Vcl.Controls, Vcl.Menus, Vcl.ActnList, Vcl.Forms, Vcl.ExtCtrls,
   ToolsAPI, ToolsAPI.Editor, DCCStrs,
   DelphiPP.Impl;
 
@@ -41,6 +41,13 @@ type
     FTargets : TArray<TImplTarget>;
     FIndexKey: string;                // what the index was built from: the project and its path
     FTaken   : Boolean;               // a Ctrl+Alt mouse-down taken: its mouse-up too
+    // the answer, held until Ctrl, Alt and the mouse button are up: Alt let go opens the IDE's
+    // main menu, which closed the popup as it opened (user, 20 Nov: "the same dialog flickers
+    // ghost-like only for a small part of a second, no text visible")
+    FWait    : TTimer;
+    FAt      : TPoint;
+    FNotes   : TArray<string>;
+    procedure OnWait(Sender: TObject);
     procedure OnMouseDown(const Editor: TWinControl; Button: TMouseButton; Shift: TShiftState;
       X, Y: Integer; var Handled: Boolean);
     procedure OnMouseUp(const Editor: TWinControl; Button: TMouseButton; Shift: TShiftState;
@@ -233,6 +240,10 @@ begin
   FMenu    := TPopupMenu.Create(nil);
   FActions := TActionList.Create(nil);
   FMenu.AutoHotkeys := maManual;      // no underlined letters added (user, 20 Nov, the first menu)
+  FWait := TTimer.Create(nil);
+  FWait.Enabled  := False;
+  FWait.Interval := 30;
+  FWait.OnTimer  := OnWait;
   const A  = TAction.Create(FActions);
   A.ActionList := FActions;
   A.Caption    := 'Go to Implementation';
@@ -255,9 +266,26 @@ end;
 
 destructor TGoToImpl.Destroy;
 begin
+  FWait.Free;
   FActions.Free;
   FMenu.Free;
   inherited;
+end;
+
+procedure TGoToImpl.OnWait(Sender: TObject);
+begin
+  try
+    if (GetAsyncKeyState(VK_MENU) < 0) or (GetAsyncKeyState(VK_CONTROL) < 0) or
+       (GetAsyncKeyState(VK_LBUTTON) < 0) or (GetAsyncKeyState(VK_RBUTTON) < 0) then
+      Exit;                           // still held: look again in 30 ms
+    FWait.Enabled := False;
+    if (Length(FTargets) = 1) and (FNotes = nil) then
+      GoToTarget(FTargets[0])
+    else
+      ShowMenu(FAt, FNotes);
+  except
+    FWait.Enabled := False;
+  end;
 end;
 
 function TGoToImpl.AllowedEvents: TCodeEditorEvents;
@@ -319,10 +347,10 @@ begin
   finally
     Screen.Cursor := Was;
   end;
-  if (Length(FTargets) = 1) and (Notes = nil) then
-    GoToTarget(FTargets[0])
-  else
-    ShowMenu(At, Notes);
+  // jump, or show the menu, once the keys and the button are let go (OnWait)
+  FAt    := At;
+  FNotes := Notes;
+  FWait.Enabled := True;
 end;
 
 procedure TGoToImpl.ShowMenu(const At: TPoint; const Notes: TArray<string>);
