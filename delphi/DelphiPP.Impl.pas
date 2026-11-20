@@ -27,6 +27,7 @@ type
     Path: string;
     Line: Integer;                    // from 1: the body's first line
     Name: string;                     // TClass.Method as its heading writes it
+    Col: Integer;                     // from 0: where the name is (0 for an implementation)
   end;
 
 // start indexing the folder's units in the background (again: a fresh index)
@@ -44,6 +45,16 @@ function IndexedCount: Integer;
 function Implementations(const Path, Text: string; Line, Character: Integer;
   WaitMs: Cardinal = 30000): TArray<TImplTarget>;
 
+// where the name at Line, Character is declared: a local or parameter, a member of the class
+// (or of the receiver's type, in x.M) or an ancestor's, a declaration of the unit's, then of the
+// workspace's; none, or one
+function Definitions(const Path, Text: string; Line, Character: Integer;
+  WaitMs: Cardinal = 30000): TArray<TImplTarget>;
+
+// where the type of the name (or of x.M) at Line, Character is declared
+function TypeDefinitions(const Path, Text: string; Line, Character: Integer;
+  WaitMs: Cardinal = 30000): TArray<TImplTarget>;
+
 implementation
 
 uses
@@ -53,16 +64,24 @@ uses
 type
   TBytesA = TArray<Byte>;
 
+  TPos = record
+    Line, Col: Integer;               // from 1, from 0
+  end;
+
   TTypeInfo = class
     Name: string;
     IsIntf: Boolean;
+    Forward: Boolean;                 // `TFoo = class;`: until the full declaration is read
     FileIdx, Line: Integer;
+    Col: Integer;                     // the name's, from 0
     Parents: TList<string>;                     // in full: lower case, no spaces
     Methods: TDictionary<string, Integer>;
     Resolutions: TDictionary<string, string>;   // 'ifoo.bar' -> 'baz'
     Members: TDictionary<string, string>;       // field or property -> its type, in full
     Results: TDictionary<string, string>;       // a function method -> its result type
     TParams: TList<string>;
+    Places: TDictionary<string, TPos>;          // a member -> where its name is declared;
+                                                // an overload's first
     constructor Create;
     destructor Destroy; override;
   end;
@@ -70,6 +89,7 @@ type
   TPlace = record
     FileIdx, Line: Integer;
     Name: string;
+    Col: Integer;                     // from 0
   end;
 
   TLocals = TList<TDictionary<string, string>>;
@@ -84,7 +104,9 @@ var
   Impls: TDictionary<string, TPlace>;
   Funcs: TDictionary<string, string>;
   ImplCache: TObjectDictionary<string, TList<string>>;
-  Stopping: Boolean;                  // the unit finalizing (the IDE unloading its package)
+  Names: TDictionary<string, TPlace>; // a unit's type, routine, var or const: where it is declared
+                                      // (the first unit's, for a name in two)
+  Stopping: Boolean;                 // the unit finalizing (the IDE unloading its package)
   Built: Boolean;
   Running: Integer;                   // indexing threads not yet finished
 
@@ -96,11 +118,12 @@ begin
   Members := TDictionary<string, string>.Create;
   Results := TDictionary<string, string>.Create;
   TParams := TList<string>.Create;
+  Places := TDictionary<string, TPos>.Create;
 end;
 
 destructor TTypeInfo.Destroy;
 begin
-  Parents.Free; Methods.Free; Resolutions.Free; Members.Free; Results.Free; TParams.Free;
+  Parents.Free; Methods.Free; Resolutions.Free; Members.Free; Results.Free; TParams.Free; Places.Free;
   inherited;
 end;
 
@@ -261,6 +284,23 @@ end;
 
 { the index }
 
+function PosOf(const N: TSNode): TPos;
+begin
+  Result.Line := LineOf(N);
+  Result.Col  := ts_node_start_point(N).Column;
+end;
+
+// a unit-level name (Key: no generic arguments, no unit), the first unit's
+procedure AddName(FileIdx: Integer; const Src: TBytesA; const N: TSNode);
+begin
+  var P: TPlace;
+  P.FileIdx := FileIdx;
+  P.Line    := LineOf(N);
+  P.Col     := ts_node_start_point(N).Column;
+  P.Name    := Txt(Src, N);
+  Names.TryAdd(Key(P.Name), P);
+end;
+
 procedure AddMembers(Info: TTypeInfo; const Src: TBytesA; const N: TSNode);
 begin
   for var C in Kids(N) do
@@ -276,6 +316,7 @@ begin
         if KindOf(D) = 'identifier' then
         begin
           Info.Members.AddOrSetValue(Txt(Src, D).ToLower, Ty);
+          Info.Places.TryAdd(Txt(Src, D).ToLower, PosOf(D));
           if K = 'declProp' then
             Break;
         end
@@ -305,6 +346,7 @@ begin
         Continue;
       end;
       Info.Methods.AddOrSetValue(Txt(Src, Name).ToLower, LineOf(C));
+      Info.Places.TryAdd(Txt(Src, Name).ToLower, PosOf(Name));
       const T = FirstOf(C, 'typeref');
       if not IsNull(T) then
         Info.Results.AddOrSetValue(Txt(Src, Name).ToLower, Full(Txt(Src, T)));
@@ -335,13 +377,21 @@ begin
   if IsNull(NameN) or IsNull(Body) then
     Exit;
   const K = Key(Txt(Src, NameN));
-  if Types.ContainsKey(K) then
-    Exit;
+  // `IFoo = interface;`, `TFoo = class;`: a forward declaration, no parents and no members; the
+  // full one, later, takes its place (until 20 Nov the forward one stayed, and the interface
+  // seemed to have no methods)
+  const BodyText = Full(Txt(Src, Body));
+  const Forward = (BodyText = 'class') or (BodyText = 'interface') or (BodyText = 'dispinterface');
+  var Old: TTypeInfo;
+  if Types.TryGetValue(K, Old) and (Forward or not Old.Forward) then
+    Exit;                             // a name in two units: the first's
   const Info = TTypeInfo.Create;
+  Info.Forward := Forward;
   Info.Name := Txt(Src, NameN);
   Info.IsIntf := KindOf(Body) = 'declIntf';
   Info.FileIdx := FileIdx;
   Info.Line := LineOf(Decl);
+  Info.Col := ts_node_start_point(NameN).Column;
   // `<T: class, constructor; TID>`: T and TID
   var TP := Full(Txt(Src, NameN));
   if TP.IndexOf('<') >= 0 then
@@ -356,7 +406,7 @@ begin
     if KindOf(C) = 'typeref' then
       Info.Parents.Add(Full(Txt(Src, C)));
   AddMembers(Info, Src, Body);
-  Types.Add(K, Info);
+  Types.AddOrSetValue(K, Info);       // over a forward declaration (freeing it)
 end;
 
 procedure IndexNode(FileIdx: Integer; const Src: TBytesA; const N: TSNode; InType: Boolean);
@@ -364,6 +414,15 @@ begin
   const K = KindOf(N);
   if K = 'declType' then
   begin
+    // any type: a record, an enumeration, an alias too; not a forward declaration's name
+    const Decl = Full(Txt(Src, N)).TrimRight([';']);
+    if not (Decl.EndsWith('=class') or Decl.EndsWith('=interface') or Decl.EndsWith('=dispinterface')) then
+      for var C in Kids(N) do
+        if (KindOf(C) = 'identifier') or (KindOf(C) = 'genericTpl') then
+        begin
+          AddName(FileIdx, Src, C);
+          Break;
+        end;
     IndexType(FileIdx, Src, N);
     InType := True;
   end
@@ -389,6 +448,8 @@ begin
       begin
         const Id = FirstOf(H, 'identifier');
         const T = FirstOf(H, 'typeref');
+        if not IsNull(Id) then
+          AddName(FileIdx, Src, Id);  // a routine with no declaration in an interface section
         if not IsNull(Id) and not IsNull(T) and not Funcs.ContainsKey(Txt(Src, Id).ToLower) then
           Funcs.Add(Txt(Src, Id).ToLower, Full(Txt(Src, T)));
       end;
@@ -399,11 +460,16 @@ begin
   begin
     const Id = FirstOf(N, 'identifier');
     const T = FirstOf(N, 'typeref');
+    if not IsNull(Id) then
+      AddName(FileIdx, Src, Id);
     if not IsNull(Id) and not IsNull(T) and not Funcs.ContainsKey(Txt(Src, Id).ToLower) then
       Funcs.Add(Txt(Src, Id).ToLower, Full(Txt(Src, T)));
   end
   else if ((K = 'declVar') or (K = 'declConst')) and not InType then
   begin
+    for var C in Kids(N) do
+      if KindOf(C) = 'identifier' then
+        AddName(FileIdx, Src, C);
     const T = TypeChild(N);
     if not IsNull(T) then
       for var C in Kids(N) do
@@ -469,7 +535,7 @@ begin
       try
         Lock.Enter;
         try
-          Paths.Clear; Globals.Clear; Types.Clear; Impls.Clear; Funcs.Clear; ImplCache.Clear;
+          Paths.Clear; Globals.Clear; Types.Clear; Impls.Clear; Funcs.Clear; ImplCache.Clear; Names.Clear;
           try
             Build(Deep, Flat);
           except
@@ -713,6 +779,115 @@ begin
   Result := -1;
 end;
 
+{ a query: the file as the editor has it, parsed; the identifier under the cursor, the way down
+  to it, the class its routine belongs to, and the locals of each routine around it }
+
+type
+  TQuery = class
+    Src: TBytesA;
+    Parser: TSParser;
+    Tree: TSTree;
+    Chain: TList<TSNode>;             // from the root to N
+    N: TSNode;
+    Found: Boolean;                   // N is an identifier
+    Cls: string;                      // the class of the method around the cursor, by Key
+    Locals: TLocals;
+    FileIdx: Integer;
+    constructor Create(const Path, Text: string; Line, Character: Integer);
+    destructor Destroy; override;
+    function Up: TSNode;              // N's parent
+    function IsMember: Boolean;       // N is M in x.M
+    function Name: string;            // N's text, lower case
+  end;
+
+constructor TQuery.Create(const Path, Text: string; Line, Character: Integer);
+begin
+  Chain := TList<TSNode>.Create;
+  Locals := TLocals.Create;
+  FileIdx := FileIndexOf(Path);
+  Src := Bytes(Text);
+  const Lines = Text.Replace(#13#10, #10).Replace(#13, #10).Split([#10]);
+  if (Line < 0) or (Line > High(Lines)) then
+    Exit;
+  // LSP's UTF-16 column, as a byte column of the line
+  const Col = TEncoding.UTF8.GetByteCount(Lines[Line].Substring(0, Character));
+  Parser := ts_parser_new;
+  ts_parser_set_language(Parser, tree_sitter_delphi13);
+  Tree := ts_parser_parse_string(Parser, nil, PByte(Src), Length(Src));
+  // down from the root to the identifier under the cursor, keeping the way
+  N := ts_tree_root_node(Tree);
+  while True do
+  begin
+    Chain.Add(N);
+    var Next := Default(TSNode);
+    for var C in Kids(N) do
+    begin
+      const S = ts_node_start_point(C);
+      const E = ts_node_end_point(C);
+      if ((S.Row < UInt32(Line)) or ((S.Row = UInt32(Line)) and (S.Column <= UInt32(Col)))) and
+         ((E.Row > UInt32(Line)) or ((E.Row = UInt32(Line)) and (E.Column >= UInt32(Col)))) then
+      begin
+        Next := C;
+        if KindOf(C) = 'identifier' then
+          Break;                      // at a boundary, the name over the punctuation
+      end;
+    end;
+    if IsNull(Next) then
+      Break;
+    N := Next;
+  end;
+  Found := (KindOf(N) = 'identifier') and (Chain.Count >= 2);
+  if not Found then
+    Exit;
+  for var R in Chain do
+    if KindOf(R) = 'defProc' then
+    begin
+      const H = FirstOf(R, 'declProc');
+      if not IsNull(H) then
+      begin
+        const Nm = FirstOf(H, 'genericDot');
+        if not IsNull(Nm) then
+        begin
+          const Parts = Txt(Src, Nm).Replace(' ', '').Split(['.']);
+          if Length(Parts) >= 2 then
+            Cls := Key(Parts[High(Parts) - 1]);
+        end;
+      end;
+      const D = TDictionary<string, string>.Create;
+      Locals.Add(D);
+      AddLocals(Src, R, ts_node_start_byte(N), D);
+    end;
+end;
+
+destructor TQuery.Destroy;
+begin
+  for var D in Locals do
+    D.Free;
+  Locals.Free;
+  Chain.Free;
+  if Tree <> nil then
+    ts_tree_delete(Tree);
+  if Parser <> nil then
+    ts_parser_delete(Parser);
+  inherited;
+end;
+
+function TQuery.Up: TSNode;
+begin
+  Result := Chain[Chain.Count - 2];
+end;
+
+function TQuery.IsMember: Boolean;
+begin
+  Result := Found and (KindOf(Up) = 'exprDot') and
+            (ts_node_child(Up, ts_node_child_count(Up) - 1).id = N.id);
+end;
+
+function TQuery.Name: string;
+begin
+  Result := Txt(Src, N).ToLower;
+end;
+
 function Implementations(const Path, Text: string; Line, Character: Integer;
   WaitMs: Cardinal): TArray<TImplTarget>;
 begin
@@ -721,128 +896,290 @@ begin
     Exit;
   Lock.Enter;
   try
-    const Src = Bytes(Text);
-    // LSP's UTF-16 column, as a byte column of the line
-    const Lines = Text.Replace(#13#10, #10).Replace(#13, #10).Split([#10]);
-    if (Line < 0) or (Line > High(Lines)) then
-      Exit;
-    const Col = TEncoding.UTF8.GetByteCount(Lines[Line].Substring(0, Character));
-    const Parser = ts_parser_new;
+    const Q = TQuery.Create(Path, Text, Line, Character);
     try
-      ts_parser_set_language(Parser, tree_sitter_delphi13);
-      const Tree = ts_parser_parse_string(Parser, nil, PByte(Src), Length(Src));
+      if not Q.IsMember then
+        Exit;                         // a member's name: x.M with the cursor on M
+      const Cls = Q.Cls;
+      const Ty = TypeOfExpr(Q.Src, ts_node_child(Q.Up, 0), Cls, Q.FileIdx, Q.Locals);
+      var Info: TTypeInfo;
+      if (Ty = '') or not Types.TryGetValue(Key(Ty), Info) or not Info.IsIntf then
+        Exit;
+      const Intf = Key(Ty);
+      const M = Q.Name;
+      var DI := DeclaringIntf(Intf, M);
+      if DI = '' then
+        Exit;
+      const Recv = Args(Ty);
+      const Wild: TList<string> = if (Cls <> '') and Types.ContainsKey(Cls) then Types[Cls].TParams else nil;
+      const Seen = TDictionary<string, Boolean>.Create;
       try
-        // down from the root to the identifier under the cursor, keeping the way
-        var Chain := TList<TSNode>.Create;
-        try
-          var N := ts_tree_root_node(Tree);
-          while True do
+        for var C in Implementers(Intf) do
+        begin
+          if (Length(Recv) > 0) and not Reaches(C, Intf, Recv, Wild, 0) then
+            Continue;
+          var Owner, Method: string;
+          if not ImplementingMethod(C, DI, M, Owner, Method) and
+             not ImplementingMethod(C, Intf, M, Owner, Method) then
+            Continue;
+          const KeyS = Owner + '.' + Method;
+          if Seen.ContainsKey(KeyS) then
+            Continue;
+          Seen.Add(KeyS, True);
+          var T := Default(TImplTarget);
+          var P: TPlace;
+          if Impls.TryGetValue(KeyS, P) then
           begin
-            Chain.Add(N);
-            var Next := ts_node_child(N, ts_node_child_count(N));
-            for var C in Kids(N) do
-            begin
-              const S = ts_node_start_point(C);
-              const E = ts_node_end_point(C);
-              if ((S.Row < UInt32(Line)) or ((S.Row = UInt32(Line)) and (S.Column <= UInt32(Col)))) and
-                 ((E.Row > UInt32(Line)) or ((E.Row = UInt32(Line)) and (E.Column >= UInt32(Col)))) then
-              begin
-                Next := C;
-                if KindOf(C) = 'identifier' then
-                  Break;              // at a boundary, the name over the punctuation
-              end;
-            end;
-            if IsNull(Next) then
-              Break;
-            N := Next;
+            T.Path := Paths[P.FileIdx];
+            T.Line := P.Line;
+            T.Name := P.Name;
+          end
+          else
+          begin
+            // declared, no body found (abstract, or a unit not indexed): its declaration
+            const OI = Types[Owner];
+            T.Path := Paths[OI.FileIdx];
+            if not OI.Methods.TryGetValue(Method, T.Line) then
+              T.Line := OI.Line;
+            T.Name := OI.Name + '.' + Method;
           end;
-          if (KindOf(N) <> 'identifier') or (Chain.Count < 2) then
-            Exit;
-          const Dot = Chain[Chain.Count - 2];
-          if (KindOf(Dot) <> 'exprDot') or (ts_node_child(Dot, ts_node_child_count(Dot) - 1).id <> N.id) then
-            Exit;                     // a member's name: x.M with the cursor on M
-          // the class a method belongs to, and the locals of each routine around the cursor
-          var Cls := '';
-          const Locals = TLocals.Create;
-          try
-            for var R in Chain do
-              if KindOf(R) = 'defProc' then
-              begin
-                const H = FirstOf(R, 'declProc');
-                if not IsNull(H) then
-                begin
-                  const Nm = FirstOf(H, 'genericDot');
-                  if not IsNull(Nm) then
-                  begin
-                    const Parts = Txt(Src, Nm).Replace(' ', '').Split(['.']);
-                    if Length(Parts) >= 2 then
-                      Cls := Key(Parts[High(Parts) - 1]);
-                  end;
-                end;
-                const D = TDictionary<string, string>.Create;
-                Locals.Add(D);
-                AddLocals(Src, R, ts_node_start_byte(N), D);
-              end;
-            const Ty = TypeOfExpr(Src, ts_node_child(Dot, 0), Cls, FileIndexOf(Path), Locals);
-            var Info: TTypeInfo;
-            if (Ty = '') or not Types.TryGetValue(Key(Ty), Info) or not Info.IsIntf then
-              Exit;
-            const Intf = Key(Ty);
-            const M = Txt(Src, N).ToLower;
-            var DI := DeclaringIntf(Intf, M);
-            if DI = '' then
-              Exit;
-            const Recv = Args(Ty);
-            const Wild: TList<string> = if (Cls <> '') and Types.ContainsKey(Cls) then Types[Cls].TParams else nil;
-            const Seen = TDictionary<string, Boolean>.Create;
-            try
-              for var C in Implementers(Intf) do
-              begin
-                if (Length(Recv) > 0) and not Reaches(C, Intf, Recv, Wild, 0) then
-                  Continue;
-                var Owner, Method: string;
-                if not ImplementingMethod(C, DI, M, Owner, Method) and
-                   not ImplementingMethod(C, Intf, M, Owner, Method) then
-                  Continue;
-                const KeyS = Owner + '.' + Method;
-                if Seen.ContainsKey(KeyS) then
-                  Continue;
-                Seen.Add(KeyS, True);
-                var T: TImplTarget;
-                var P: TPlace;
-                if Impls.TryGetValue(KeyS, P) then
-                begin
-                  T.Path := Paths[P.FileIdx];
-                  T.Line := P.Line;
-                  T.Name := P.Name;
-                end
-                else
-                begin
-                  // declared, no body found (abstract, or a unit not indexed): its declaration
-                  const OI = Types[Owner];
-                  T.Path := Paths[OI.FileIdx];
-                  if not OI.Methods.TryGetValue(Method, T.Line) then
-                    T.Line := OI.Line;
-                  T.Name := OI.Name + '.' + Method;
-                end;
-                Result := Result + [T];
-              end;
-            finally
-              Seen.Free;
-            end;
-          finally
-            for var D in Locals do
-              D.Free;
-            Locals.Free;
-          end;
-        finally
-          Chain.Free;
+          Result := Result + [T];
         end;
       finally
-        ts_tree_delete(Tree);
+        Seen.Free;
       end;
     finally
-      ts_parser_delete(Parser);
+      Q.Free;
+    end;
+  finally
+    Lock.Leave;
+  end;
+end;
+
+{ go to definition, go to type definition }
+
+function TargetOf(const Path: string; Line, Col: Integer; const Name: string): TImplTarget;
+begin
+  Result.Path := Path;
+  Result.Line := Line;
+  Result.Col  := Col;
+  Result.Name := Name;
+end;
+
+// member M of Ty, or of an ancestor: a class's parent, each of an interface's
+function MemberTarget(const Ty, M: string; out T: TImplTarget; Depth: Integer = 0): Boolean;
+begin
+  var Info: TTypeInfo;
+  if (Depth > 32) or (Ty = '') or not Types.TryGetValue(Key(Ty), Info) then
+    Exit( False );
+  var P: TPos;
+  if Info.Places.TryGetValue(M, P) then
+  begin
+    T := TargetOf(Paths[Info.FileIdx], P.Line, P.Col, Info.Name + '.' + M);
+    Exit( True );
+  end;
+  if not Info.IsIntf then
+    Exit( MemberTarget(ClassParent(Info), M, T, Depth + 1) );
+  for var Pa in Info.Parents do
+    if MemberTarget(Pa, M, T, Depth + 1) then
+      Exit( True );
+  Result := False;
+end;
+
+// a unit-level name of the workspace's: a class or interface, then any type, routine, var, const
+function NameTarget(const Name: string; out T: TImplTarget): Boolean;
+begin
+  var Info: TTypeInfo;
+  if Types.TryGetValue(Key(Name), Info) then
+  begin
+    T := TargetOf(Paths[Info.FileIdx], Info.Line, Info.Col, Info.Name);
+    Exit( True );
+  end;
+  var P: TPlace;
+  if Names.TryGetValue(Key(Name), P) then
+  begin
+    T := TargetOf(Paths[P.FileIdx], P.Line, P.Col, P.Name);
+    Exit( True );
+  end;
+  Result := False;
+end;
+
+function NodeTarget(const Path: string; const Src: TBytesA; const N: TSNode): TImplTarget;
+begin
+  Result := TargetOf(Path, LineOf(N), ts_node_start_point(N).Column, Txt(Src, N));
+end;
+
+// where the routines around the cursor declare the name: a parameter, a var or const, an inline
+// var before the cursor; the innermost routine's first
+function LocalTarget(Q: TQuery; const Path: string; out T: TImplTarget): Boolean;
+var
+  Hit: TSNode;
+  Got: Boolean;
+
+  procedure Walk(const X: TSNode);
+  begin
+    for var Z in Kids(X) do
+    begin
+      if Got then
+        Exit;
+      const K = KindOf(Z);
+      if K = 'defProc' then
+        Continue;                     // a nested routine's own
+      if (K = 'declArg') or (K = 'declVar') or (K = 'declConst') or
+         ((K = 'varAssignDef') and (ts_node_start_byte(Z) < ts_node_start_byte(Q.N))) then
+      begin
+        for var Y in Kids(Z) do
+          if (KindOf(Y) = 'identifier') and (Txt(Q.Src, Y).ToLower = Q.Name) then
+          begin
+            Hit := Y;
+            Got := True;
+            Exit;
+          end;
+      end
+      else
+        Walk(Z);
+    end;
+  end;
+
+begin
+  Got := False;
+  for var I := Q.Chain.Count - 1 downto 0 do
+    if KindOf(Q.Chain[I]) = 'defProc' then
+    begin
+      Walk(Q.Chain[I]);
+      if Got then
+        Break;
+    end;
+  if Got then
+    T := NodeTarget(Path, Q.Src, Hit);
+  Result := Got;
+end;
+
+// a type, routine, var or const the open file declares, outside routines and types: the
+// editor's text, which may be newer than the index's
+function UnitTarget(Q: TQuery; const Path: string; out T: TImplTarget): Boolean;
+
+  function Find(const X: TSNode): TSNode;
+  begin
+    for var Z in Kids(X) do
+    begin
+      const K = KindOf(Z);
+      if K = 'declType' then
+      begin
+        for var C in Kids(Z) do
+          if (KindOf(C) = 'identifier') or (KindOf(C) = 'genericTpl') then
+          begin
+            if Key(Txt(Q.Src, C)) = Q.Name then
+              Exit( C );
+            Break;
+          end;
+      end
+      else if K = 'defProc' then
+      begin
+        const H = FirstOf(Z, 'declProc');
+        if not IsNull(H) then
+        begin
+          const Id = FirstOf(H, 'identifier');
+          if not IsNull(Id) and (Txt(Q.Src, Id).ToLower = Q.Name) then
+            Exit( Id );
+        end;
+      end
+      else if (K = 'declProc') or (K = 'declVar') or (K = 'declConst') then
+      begin
+        for var C in Kids(Z) do
+          if (KindOf(C) = 'identifier') and (Txt(Q.Src, C).ToLower = Q.Name) then
+            Exit( C );
+      end
+      else
+      begin
+        const R = Find(Z);
+        if not IsNull(R) then
+          Exit( R );
+      end;
+    end;
+    Result := Default(TSNode);
+  end;
+
+begin
+  const R = Find(ts_tree_root_node(Q.Tree));
+  Result := not IsNull(R);
+  if Result then
+    T := NodeTarget(Path, Q.Src, R);
+end;
+
+function Definitions(const Path, Text: string; Line, Character: Integer;
+  WaitMs: Cardinal): TArray<TImplTarget>;
+begin
+  Result := nil;
+  if Ready.WaitFor(WaitMs) <> wrSignaled then
+    Exit;
+  Lock.Enter;
+  try
+    const Q = TQuery.Create(Path, Text, Line, Character);
+    try
+      if not Q.Found then
+        Exit;
+      var T := Default(TImplTarget);
+      if Q.IsMember then
+      begin
+        // x.M: M of x's type; or of a type named, as TCollections.CreateList
+        const L = ts_node_child(Q.Up, 0);
+        var Ty := TypeOfExpr(Q.Src, L, Q.Cls, Q.FileIdx, Q.Locals);
+        if (Ty = '') and Types.ContainsKey(Key(Txt(Q.Src, L))) then
+          Ty := Txt(Q.Src, L);
+        if MemberTarget(Ty, Q.Name, T) then
+          Result := [T];
+        Exit;
+      end;
+      if KindOf(Q.Up) = 'genericDot' then
+      begin
+        // TFoo.Bar, as a method's heading writes it: Bar of TFoo (a unit's name before TFoo
+        // isn't a type: the name alone, below)
+        var Prev := '';
+        for var C in Kids(Q.Up) do
+        begin
+          if C.id = Q.N.id then
+            Break;
+          if KindOf(C) <> '.' then
+            Prev := Txt(Q.Src, C);
+        end;
+        if (Prev <> '') and MemberTarget(Prev, Q.Name, T) then
+        begin
+          Result := [T];
+          Exit;
+        end;
+      end;
+      if LocalTarget(Q, Path, T) or MemberTarget(Q.Cls, Q.Name, T) or UnitTarget(Q, Path, T) or
+         NameTarget(Q.Name, T) then
+        Result := [T];
+    finally
+      Q.Free;
+    end;
+  finally
+    Lock.Leave;
+  end;
+end;
+
+function TypeDefinitions(const Path, Text: string; Line, Character: Integer;
+  WaitMs: Cardinal): TArray<TImplTarget>;
+begin
+  Result := nil;
+  if Ready.WaitFor(WaitMs) <> wrSignaled then
+    Exit;
+  Lock.Enter;
+  try
+    const Q = TQuery.Create(Path, Text, Line, Character);
+    try
+      if not Q.Found then
+        Exit;
+      var Ty := TypeOfExpr(Q.Src, if Q.IsMember then Q.Up else Q.N, Q.Cls, Q.FileIdx, Q.Locals);
+      if (Ty = '') and Types.ContainsKey(Key(Q.Name)) then
+        Ty := Q.Name;                 // a type's own name
+      var T := Default(TImplTarget);
+      if (Ty <> '') and NameTarget(Ty, T) then
+        Result := [T];
+    finally
+      Q.Free;
     end;
   finally
     Lock.Leave;
@@ -859,6 +1196,7 @@ initialization
   Impls := TDictionary<string, TPlace>.Create;
   Funcs := TDictionary<string, string>.Create;
   ImplCache := TObjectDictionary<string, TList<string>>.Create([doOwnsValues]);
+  Names := TDictionary<string, TPlace>.Create;
 
 finalization
   // an index still being built stops at its next file; nothing is freed under it (the IDE
@@ -867,6 +1205,7 @@ finalization
   while TInterlocked.CompareExchange(Running, 0, 0) > 0 do
     Sleep(10);
   ImplCache.Free;
+  Names.Free;
   Funcs.Free;
   Impls.Free;
   Types.Free;

@@ -337,6 +337,10 @@ type
     When: UInt64;
   end;
 
+  // DelphiPP.Impl's queries: Implementations, Definitions, TypeDefinitions
+  TFinder = function(const Path, Text: string; Line, Character: Integer;
+    WaitMs: Cardinal): TArray<TImplTarget>;
+
   TServer = class
   private
     FIn, FOut : THandle;
@@ -358,7 +362,7 @@ type
     procedure Want(const Uri, Text: string);
     procedure Work;
     function CodeActions(const Uri: string): TJSONArray;
-    function ImplementationsAt(Params: TJSONObject): TJSONArray;
+    function LocationsAt(Params: TJSONObject; Find: TFinder): TJSONArray;
     procedure Handle(Msg: TJSONObject);
   public
     constructor Create;
@@ -633,8 +637,9 @@ begin
 end;
 
 // textDocument/implementation: a Location for each implementing method, none when the name
-// under the cursor isn't a call on an interface
-function TServer.ImplementationsAt(Params: TJSONObject): TJSONArray;
+// under the cursor isn't a call on an interface; textDocument/definition (and declaration):
+// where the name is declared; textDocument/typeDefinition: where its type is
+function TServer.LocationsAt(Params: TJSONObject; Find: TFinder): TJSONArray;
 begin
   Result := TJSONArray.Create;
   const Uri = Params.GetValue<string>('textDocument.uri');
@@ -649,12 +654,12 @@ begin
   const Path = PathOf(Uri);
   if (Text = '') and FileExists(Path) then
     Text := TFile.ReadAllText(Path);
-  for var T in Implementations(Path, Text, Params.GetValue<Integer>('position.line'),
-                               Params.GetValue<Integer>('position.character')) do
+  for var T in Find(Path, Text, Params.GetValue<Integer>('position.line'),
+                    Params.GetValue<Integer>('position.character'), 30000) do
   begin
     var At := TJSONObject.Create;
     At.AddPair('line', Num(T.Line - 1));
-    At.AddPair('character', Num(0));
+    At.AddPair('character', Num(T.Col));
     var Range := TJSONObject.Create;
     Range.AddPair('start', At);
     Range.AddPair('end', TJSONValue(At.Clone));
@@ -694,6 +699,9 @@ begin
     Caps.AddPair('textDocumentSync', Sync);
     Caps.AddPair('codeActionProvider', TJSONBool.Create(True));
     Caps.AddPair('implementationProvider', TJSONBool.Create(True));
+    Caps.AddPair('definitionProvider', TJSONBool.Create(True));
+    Caps.AddPair('declarationProvider', TJSONBool.Create(True));
+    Caps.AddPair('typeDefinitionProvider', TJSONBool.Create(True));
     // the workspace's units, indexed in the background for go to implementation
     var Root := '';
     if Params.GetValue('rootUri') is TJSONString then
@@ -739,7 +747,11 @@ begin
   else if Method = 'textDocument/codeAction' then
     Reply(Id, CodeActions(Params.GetValue<string>('textDocument.uri')))
   else if Method = 'textDocument/implementation' then
-    Reply(Id, ImplementationsAt(Params))
+    Reply(Id, LocationsAt(Params, Implementations))
+  else if (Method = 'textDocument/definition') or (Method = 'textDocument/declaration') then
+    Reply(Id, LocationsAt(Params, Definitions))
+  else if Method = 'textDocument/typeDefinition' then
+    Reply(Id, LocationsAt(Params, TypeDefinitions))
   else if Id <> nil then
   begin
     var Err := TJSONObject.Create;
