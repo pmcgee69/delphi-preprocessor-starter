@@ -161,6 +161,14 @@ begin
           Q := TStopwatch.StartNew;
           const M = Implementations(S.Path, Text, S.Line, S.Ch, 600000);
           Impls.Add(Q.Elapsed.TotalMilliseconds, M <> nil, At);
+          if (Dump <> nil) and (M <> nil) then
+          begin
+            var Lines: TArray<string> := nil;
+            for var X in M do
+              Lines := Lines + [Format('%s:%d', [X.Path, X.Line])];
+            TArray.Sort<string>(Lines);
+            Dump.Add(Format('impl %s:%d:%d  %d  %s', [S.Path, S.Line, S.Ch, Length(M), string.Join(' ', Lines)]));
+          end;
         except
           Inc(Impls.Failed);
         end;

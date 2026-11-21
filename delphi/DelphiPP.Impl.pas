@@ -16,8 +16,8 @@ unit DelphiPP.Impl;
   fields and properties, globals, a function's result; then each class implementing the
   receiver's interface (or one inheriting from it) with arguments that can be the receiver's: its
   method (a resolution clause's, else its own or its nearest ancestor's), and each descendant's
-  override. A sketch, not a compiler: no overloads, no uses-clause order (a name in two units:
-  the first indexed), no `as` or `with`, generic constraints unchecked. A file is read again
+  override. A sketch, not a compiler: overloads told apart only by their arguments' number and the
+  types it can see, no uses-clause order (a name in two units: the first indexed), no `as` or `with`, generic constraints unchecked. A file is read again
   when it is asked from, or (Reindex) saved, or read as an editor has it. }
 
 interface
@@ -104,6 +104,16 @@ type
     Name: string;                     // as written
   end;
 
+  // one overload of a method: its parameters' types in full, ';' between ('' none; '?' untyped),
+  // how many arguments it takes, where it is declared, and how it dispatches
+  TSig = record
+    Params: string;
+    Res: string;                      // an operator's result type: Implicit's overloads differ only there
+    Min, Max: Integer;
+    Line, Col: Integer;
+    D: Char;
+  end;
+
   TTypeInfo = class
     Name: string;
     IsIntf: Boolean;
@@ -120,6 +130,8 @@ type
                                                 // an overload's first
     Dispatch: TDictionary<string, Char>;        // a method -> 'v' virtual or dynamic, 'a' abstract,
                                                 // 'o' override; none for a static method
+                                                // (an overload's first)
+    Sigs: TObjectDictionary<string, TList<TSig>>; // a method -> its overloads, as declared
     constructor Create;
     destructor Destroy; override;
   end;
@@ -144,7 +156,8 @@ var
   ImplCache: TObjectDictionary<string, TList<string>>;
   Names: TDictionary<string, TPlace>; // a unit's type, routine, var or const: where it is declared
   Aliases: TDictionary<string, string>; // `IRowMapper = IRowMapper<TObject>;`: irowmapper -> irowmapper<tobject>
-  Owners: TDictionary<string, Integer>; // 'f:' + a function, 'a:' + an alias -> the file that gave it
+  Enums: TDictionary<string, string>; // an enumeration's value -> its type, in full: ntfinally -> tsyntaxnodetype
+  Owners: TDictionary<string, Integer>; // 'f:' + a function, 'a:' + an alias, 'e:' + an enum value -> the file that gave it
   Indexed: TDictionary<Integer, Integer>; // a file -> its text's hash, as indexed
                                       // (the first unit's, for a name in two)
   Stopping: Boolean;                 // the unit finalizing (the IDE unloading its package)
@@ -161,12 +174,13 @@ begin
   TParams := TList<string>.Create;
   Places := TDictionary<string, TPos>.Create;
   Dispatch := TDictionary<string, Char>.Create;
+  Sigs := TObjectDictionary<string, TList<TSig>>.Create([doOwnsValues]);
 end;
 
 destructor TTypeInfo.Destroy;
 begin
   Parents.Free; Methods.Free; Resolutions.Free; Members.Free; Results.Free; TParams.Free; Places.Free;
-  Dispatch.Free;
+  Dispatch.Free; Sigs.Free;
   inherited;
 end;
 
@@ -383,6 +397,58 @@ begin
   Names.TryAdd(DeclKey(P.Name), P);
 end;
 
+// a heading's parameters: each name's type in full, and how many need an argument (no default).
+// `procedure Put(A, B: Integer; Sep: Char = ',')` is 'integer;integer;char', 2 to 3 arguments
+function SigOf(const Src: TBytesA; const Proc: TSNode): TSig;
+begin
+  Result := Default(TSig);
+  const A = FirstOf(Proc, 'declArgs');
+  if IsNull(A) then
+    Exit;
+  var Ts: TArray<string> := nil;
+  for var Arg in Kids(A) do
+    if KindOf(Arg) = 'declArg' then
+    begin
+      var Names := 0;
+      var Ty: string := '?';          // untyped: `const X`, `var Buffer`
+      var HasDefault := False;
+      for var C in Kids(Arg) do
+      begin
+        const K = KindOf(C);
+        if K = 'identifier' then
+          Inc(Names)
+        else if K = 'type' then
+          Ty := Full(Txt(Src, C))
+        else if K = 'defaultValue' then
+          HasDefault := True;
+      end;
+      for var I := 1 to Names do
+      begin
+        Ts := Ts + [Ty];
+        Inc(Result.Max);
+        if not HasDefault then
+          Inc(Result.Min);
+      end;
+    end;
+  Result.Params := string.Join(';', Ts);
+  if not IsNull(FirstOf(Proc, 'kOperator')) then
+  begin
+    var R := FirstOf(Proc, 'type');
+    if IsNull(R) then
+      R := FirstOf(Proc, 'typeref');
+    if not IsNull(R) then
+      Result.Res := Full(Txt(Src, R));
+  end;
+end;
+
+// how an overload is keyed: '(integer;string)', an operator's with its result, '(t):integer'
+function SigKey(const S: TSig): string;
+begin
+  Result := '(' + S.Params + ')';
+  if S.Res <> '' then
+    Result := Result + ':' + S.Res;
+end;
+
 procedure AddMembers(Info: TTypeInfo; const Src: TBytesA; const N: TSNode);
 begin
   for var C in Kids(N) do
@@ -445,6 +511,17 @@ begin
           D := 'o';
       if D <> #0 then
         Info.Dispatch.TryAdd(Txt(Src, Name).ToLower, D);
+      var S := SigOf(Src, C);
+      S.Line := LineOf(C);
+      S.Col := ts_node_start_point(Name).Column;
+      S.D := D;
+      var L: TList<TSig>;
+      if not Info.Sigs.TryGetValue(Txt(Src, Name).ToLower, L) then
+      begin
+        L := TList<TSig>.Create;
+        Info.Sigs.Add(Txt(Src, Name).ToLower, L);
+      end;
+      L.Add(S);
       const T = FirstOf(C, 'typeref');
       if not IsNull(T) then
         Info.Results.AddOrSetValue(Txt(Src, Name).ToLower, Full(Txt(Src, T)));
@@ -570,6 +647,18 @@ begin
         end;
     IndexType(FileIdx, Src, N);
     AddAlias(FileIdx, Src, N);
+    // `TKind = (kA, kB = 3)`: each value's type, the first unit's
+    const T = FirstOf(N, 'type');
+    const E = if IsNull(T) then T else FirstOf(T, 'declEnum');
+    const Nm = FirstOf(N, 'identifier');
+    if not IsNull(E) and not IsNull(Nm) then
+      for var V in Kids(E) do
+        if KindOf(V) = 'declEnumValue' then
+        begin
+          const Id = FirstOf(V, 'identifier');
+          if not IsNull(Id) and Enums.TryAdd(Txt(Src, Id).ToLower, Full(Txt(Src, Nm))) then
+            Owners.AddOrSetValue('e:' + Txt(Src, Id).ToLower, FileIdx);
+        end;
     InType := True;
   end
   else if K = 'defProc' then
@@ -588,6 +677,9 @@ begin
           P.Line := LineOf(N);
           P.Name := Parts[High(Parts) - 1] + '.' + Parts[High(Parts)];
           Impls.AddOrSetValue(Key(Parts[High(Parts) - 1]) + '.' + BaseKey(Parts[High(Parts)]), P);
+          // and by its parameters, for an overload's own body: 'tbase.put(integer)'
+          Impls.AddOrSetValue(Key(Parts[High(Parts) - 1]) + '.' + BaseKey(Parts[High(Parts)]) +
+            SigKey(SigOf(Src, H)), P);
         end;
       end
       else
@@ -686,7 +778,7 @@ begin
       try
         Lock.Enter;
         try
-          Paths.Clear; Globals.Clear; Types.Clear; Impls.Clear; Funcs.Clear; ImplCache.Clear; Names.Clear; Aliases.Clear; Owners.Clear; Indexed.Clear;
+          Paths.Clear; Globals.Clear; Types.Clear; Impls.Clear; Funcs.Clear; ImplCache.Clear; Names.Clear; Aliases.Clear; Enums.Clear; Owners.Clear; Indexed.Clear;
           try
             Build(Deep, Flat);
           except
@@ -970,6 +1062,8 @@ begin
     Owners.Remove(K);
     if K.StartsWith('f:') then
       Funcs.Remove(K.Substring(2))
+    else if K.StartsWith('e:') then
+      Enums.Remove(K.Substring(2))
     else
       Aliases.Remove(K.Substring(2));
   end;
@@ -1527,6 +1621,180 @@ begin
   end;
 end;
 
+// an overload's body; or, the method overloaded and this one's body not found (abstract, or a
+// unit not indexed), its own declaration, not a sibling's body
+function SigTarget(const Owner, Method: string; const S: TSig): TImplTarget;
+begin
+  var P: TPlace;
+  if Impls.TryGetValue(Owner + '.' + Method + SigKey(S), P) then
+  begin
+    Result := Default(TImplTarget);
+    Result.Path := Paths[P.FileIdx];
+    Result.Line := P.Line;
+    Result.Name := P.Name;
+    Exit;
+  end;
+  const OI = Types[Owner];
+  var L: TList<TSig>;
+  if OI.Sigs.TryGetValue(Method, L) and (L.Count > 1) then
+  begin
+    Result := Default(TImplTarget);
+    Result.Path := Paths[OI.FileIdx];
+    Result.Line := S.Line;
+    Result.Name := OI.Name + '.' + Method;
+    Exit;
+  end;
+  Result := MethodTarget(Owner, Method);
+end;
+
+type
+  // what tells a method's overloads apart at the cursor: a heading's or declaration's own
+  // parameters (Exact), or a call's arguments, counted, each one's type where it is known
+  TSel = record
+    Exact: Boolean;
+    Key: string;                      // with Exact: the overload's SigKey
+    N: Integer;                       // the call's arguments; -1 not known
+    Tys: TArray<string>;              // each one's type in full; '' not known
+  end;
+
+function NoSel: TSel;
+begin
+  Result := Default(TSel);
+  Result.N := -1;
+end;
+
+function Family(const T: string): Char;
+const
+  Ints: array[0..19] of string = ('integer', 'cardinal', 'shortint', 'smallint', 'longint', 'int64',
+    'uint64', 'byte', 'word', 'longword', 'fixedint', 'fixeduint', 'nativeint', 'nativeuint', 'int8',
+    'int16', 'int32', 'uint8', 'uint16', 'uint32');
+  Floats: array[0..6] of string = ('single', 'double', 'extended', 'real', 'currency', 'comp', 'tdatetime');
+  Strs: array[0..6] of string = ('string', 'ansistring', 'widestring', 'unicodestring', 'shortstring',
+    'rawbytestring', 'utf8string');
+  Chars: array[0..2] of string = ('char', 'ansichar', 'widechar');
+  Bools: array[0..3] of string = ('boolean', 'bytebool', 'wordbool', 'longbool');
+begin
+  for var W in Ints do if W = T then Exit('i');
+  for var W in Floats do if W = T then Exit('f');
+  for var W in Strs do if W = T then Exit('s');
+  for var W in Chars do if W = T then Exit('c');
+  for var W in Bools do if W = T then Exit('b');
+  if (T = 'variant') or (T = 'olevariant') then Exit('v');
+  Result := #0;
+end;
+
+// a class or interface A is P or below it
+function Descends(const A, P: string; Depth: Integer = 0): Boolean;
+begin
+  if A = P then
+    Exit(True);
+  var Info: TTypeInfo;
+  if (Depth > 32) or not Types.TryGetValue(A, Info) then
+    Exit(False);
+  for var Up in Info.Parents do
+    if Descends(Key(Up), P, Depth + 1) then
+      Exit(True);
+  Result := False;
+end;
+
+// an argument of type Arg for a parameter of type Param: 2 the same, 1 it converts, 0 can't
+// tell, -1 it can't be. '#char' is a one-character literal, '#nil' nil
+function Fits(const Arg, Param: string): Integer;
+begin
+  if (Arg = '') or (Param = '') or (Param = '?') then
+    Exit(0);
+  if Arg = Param then
+    Exit(2);
+  const PF = Family(Param);
+  if PF = 'v' then
+    Exit(0);
+  if Arg = '#char' then
+    Exit(if PF = 'c' then 2 else if PF = 's' then 1 else if PF = #0 then 0 else -1);
+  if Arg = '#nil' then
+    Exit(if PF = #0 then 0 else -1);
+  const AF = Family(Arg);
+  if (AF <> #0) and (PF <> #0) then
+  begin
+    if AF = PF then Exit(1);
+    if (AF = 'i') and (PF = 'f') then Exit(0);
+    if (AF = 'c') and (PF = 's') then Exit(0);
+    Exit(-1);
+  end;
+  const AT = Types.ContainsKey(Key(Arg));
+  const PT = Types.ContainsKey(Key(Param));
+  if AT and PT then
+    Exit(if Descends(Key(Arg), Key(Param)) then 1 else -1);
+  if ((AF <> #0) and PT) or ((PF <> #0) and AT) then
+    Exit(-1);                         // a number or a string for a class, or the other way
+  Result := 0;                        // an alias, a record, a type not indexed: can't tell
+end;
+
+// Info's overloads of M that Sel can mean: by an exact heading; else by the number of arguments,
+// then by their types (none ruled out, the most alike). False: M has no overloads recorded
+function Picked(const Info: TTypeInfo; const M: string; const Sel: TSel; out Sigs: TArray<TSig>): Boolean;
+begin
+  Sigs := nil;
+  var L: TList<TSig>;
+  if not Info.Sigs.TryGetValue(M, L) or (L.Count = 0) then
+    Exit(False);
+  Result := True;
+  Sigs := L.ToArray;
+  if L.Count = 1 then
+    Exit;
+  if Sel.Exact then
+  begin
+    var R: TArray<TSig> := nil;
+    for var S in Sigs do
+      if SigKey(S) = Sel.Key then
+        R := R + [S];
+    if R <> nil then
+      Sigs := R;
+    Exit;
+  end;
+  if Sel.N < 0 then
+    Exit;
+  var ByCount: TArray<TSig> := nil;
+  for var S in Sigs do
+    if (Sel.N >= S.Min) and (Sel.N <= S.Max) then
+      ByCount := ByCount + [S];
+  if ByCount = nil then
+    Exit;                             // mid-edit, or arguments misread: all of them
+  Sigs := ByCount;
+  if Length(Sigs) = 1 then
+    Exit;
+  var Best := -1;
+  var R: TArray<TSig> := nil;
+  for var S in Sigs do
+  begin
+    const Ps = S.Params.Split([';']);
+    var Score := 0;
+    var Ok := True;
+    for var I := 0 to Sel.N - 1 do
+    begin
+      if (I >= Length(Ps)) or (I >= Length(Sel.Tys)) then
+        Break;
+      const F = Fits(Sel.Tys[I], Ps[I]);
+      if F < 0 then
+      begin
+        Ok := False;
+        Break;
+      end;
+      Inc(Score, F);
+    end;
+    if not Ok then
+      Continue;
+    if Score > Best then
+    begin
+      Best := Score;
+      R := [S];
+    end
+    else if Score = Best then
+      R := R + [S];
+  end;
+  if R <> nil then
+    Sigs := R;
+end;
+
 // the classes below C, by their first parent, each once (C not among them)
 function Descendants(const C: string): TList<string>;
 begin
@@ -1560,50 +1828,117 @@ end;
 
 // a call of M on a C: the method that runs for a C itself (its own or an ancestor's), and if
 // that one is virtual (or itself an override), each override below C. An abstract one is left
-// out when something overrides it. Overloads are one method, as everywhere here
-function ClassImplementations(const C, M: string): TArray<TImplTarget>;
+// out when something overrides it. With overloads, only those Sel can mean, and below C only
+// the overrides of those (by their parameters)
+function ClassImplementations(const C, M: string; const Sel: TSel): TArray<TImplTarget>; overload;
 begin
   Result := nil;
   var Owner, Method: string;
   if not ImplementingMethod(C, '', M, Owner, Method) then
     Exit;
-  var D: Char;
-  if not Types[Owner].Dispatch.TryGetValue(Method, D) then
-    D := #0;
-  if D <> 'a' then
-    Result := [MethodTarget(Owner, Method)];
-  if D <> #0 then
+  var Sigs: TArray<TSig>;
+  // a heading whose parameters the indexed class lacks (a name in two units: the other unit's
+  // class was indexed): the body of exactly that heading, where there is one
+  if Sel.Exact then
   begin
-    var Subs: TArray<TImplTarget> := nil;
+    var L0: TList<TSig>;
+    var Has := False;
+    if Types[Owner].Sigs.TryGetValue(Method, L0) then
+      for var S in L0 do
+        if SigKey(S) = Sel.Key then
+          Has := True;
+    var P: TPlace;
+    if not Has and Impls.TryGetValue(Owner + '.' + Method + Sel.Key, P) then
+    begin
+      var T := Default(TImplTarget);
+      T.Path := Paths[P.FileIdx];
+      T.Line := P.Line;
+      T.Name := P.Name;
+      Result := [T];
+      Exit;
+    end;
+  end;
+  const HasSigs = Picked(Types[Owner], Method, Sel, Sigs);
+  if not HasSigs then
+  begin
+    var S := Default(TSig);
+    if not Types[Owner].Dispatch.TryGetValue(Method, S.D) then
+      S.D := #0;
+    Sigs := [S];
+  end;
+  var OwnerCount := 1;
+  var L: TList<TSig>;
+  if Types[Owner].Sigs.TryGetValue(Method, L) then
+    OwnerCount := L.Count;
+  var Mine: TArray<TImplTarget> := nil;
+  var Subs: TArray<TImplTarget> := nil;
+  var Abstracts: TArray<TImplTarget> := nil;
+  for var S in Sigs do
+  begin
+    const T = if HasSigs then SigTarget(Owner, Method, S) else MethodTarget(Owner, Method);
+    if S.D <> 'a' then
+      Mine := Mine + [T]
+    else
+      Abstracts := Abstracts + [T];
+    if S.D = #0 then
+      Continue;
     for var Sub in Descendants(C) do
     begin
-      var O: Char;
-      if Types[Sub].Dispatch.TryGetValue(M, O) and (O = 'o') then
-        Subs := Subs + [MethodTarget(Sub, M)];
+      var SL: TList<TSig>;
+      if not Types[Sub].Sigs.TryGetValue(M, SL) then
+        Continue;
+      var Os: TArray<TSig> := nil;
+      for var O in SL do
+        if (O.D = 'o') and (not HasSigs or (O.Params = S.Params)) then
+          Os := Os + [O];
+      if (Os = nil) and HasSigs and (OwnerCount = 1) then
+        for var O in SL do           // one method above, its parameters written differently
+          if O.D = 'o' then
+            Os := Os + [O];
+      for var O in Os do
+        Subs := Subs + [SigTarget(Sub, M, O)];
     end;
-    // by unit, then line: the order the units are read in, not a hash's
-    TArray.Sort<TImplTarget>(Subs, TComparer<TImplTarget>.Construct(
-      function(const A, B: TImplTarget): Integer
-      begin
-        Result := CompareText(ExtractFileName(A.Path), ExtractFileName(B.Path));
-        if Result = 0 then
-          Result := A.Line - B.Line;
-      end));
-    Result := Result + Subs;
   end;
-  if (Result = nil) and (D = 'a') then
-    Result := [MethodTarget(Owner, Method)];   // abstract, overridden nowhere: its declaration
+  // by unit, then line: the order the units are read in, not a hash's
+  TArray.Sort<TImplTarget>(Subs, TComparer<TImplTarget>.Construct(
+    function(const A, B: TImplTarget): Integer
+    begin
+      Result := CompareText(ExtractFileName(A.Path), ExtractFileName(B.Path));
+      if Result = 0 then
+        Result := A.Line - B.Line;
+    end));
+  Result := nil;
+  for var T in Mine + Subs do
+  begin
+    var Dup := False;
+    for var X in Result do
+      if (X.Line = T.Line) and SameText(X.Path, T.Path) then
+        Dup := True;
+    if not Dup then
+      Result := Result + [T];
+  end;
+  if Result = nil then
+    Result := Abstracts;              // abstract, overridden nowhere: its declaration
+end;
+
+function ClassImplementations(const C, M: string): TArray<TImplTarget>; overload;
+begin
+  Result := ClassImplementations(C, M, NoSel);
 end;
 
 // an interface method's: each class's method that implements it, of the classes that implement
 // the interface (with Recv, its arguments, those that implement it so)
 function InterfaceImplementations(const Intf, M: string; const Recv: TArray<string>;
-  const Wild: TList<string>): TArray<TImplTarget>;
+  const Wild: TList<string>; const Sel: TSel): TArray<TImplTarget>;
 begin
   Result := nil;
   const DI = DeclaringIntf(Intf, M);
   if DI = '' then
     Exit;
+  // the interface's overloads Sel can mean: a class's methods of the same parameters implement them
+  var Want: TArray<TSig>;
+  if not Picked(Types[DI], M, Sel, Want) then
+    Want := nil;
   const Seen = TDictionary<string, Boolean>.Create;
   try
     for var C in Implementers(Intf) do
@@ -1614,6 +1949,45 @@ begin
       if not ImplementingMethod(C, DI, M, Owner, Method) and
          not ImplementingMethod(C, Intf, M, Owner, Method) then
         Continue;
+      // the interface overloaded: the class's methods of the same parameters; where the class
+      // declares none of them, its nearest ancestor that does (TDerived = class(TBase) overriding
+      // only Put(Integer) still runs TBase's Put(string))
+      var CL: TList<TSig>;
+      const IntfOverloaded = (Want <> nil) and Types[DI].Sigs.ContainsKey(M) and (Types[DI].Sigs[M].Count > 1);
+      if (Want <> nil) and Types[Owner].Sigs.TryGetValue(Method, CL) and ((CL.Count > 1) or IntfOverloaded) then
+      begin
+        var Cs: TArray<TSig> := nil;
+        var At := Owner;
+        var Depth := 0;
+        while (At <> '') and (Depth < 64) do
+        begin
+          var AL: TList<TSig>;
+          if Types[At].Sigs.TryGetValue(Method, AL) then
+            for var S in AL do
+              for var W in Want do
+                if S.Params = W.Params then
+                begin
+                  Cs := Cs + [S];
+                  Break;
+                end;
+          if Cs <> nil then
+            Break;
+          At := ClassParent(Types[At]);
+          Inc(Depth);
+        end;
+        if Cs = nil then
+        begin
+          At := Owner;
+          Cs := CL.ToArray;           // parameters written differently: all of the class's
+        end;
+        for var S in Cs do
+          if not Seen.ContainsKey(At + '.' + Method + SigKey(S)) then
+          begin
+            Seen.Add(At + '.' + Method + SigKey(S), True);
+            Result := Result + [SigTarget(At, Method, S)];
+          end;
+        Continue;
+      end;
       if Seen.ContainsKey(Owner + '.' + Method) then
         Continue;
       Seen.Add(Owner + '.' + Method, True);
@@ -1622,6 +1996,71 @@ begin
   finally
     Seen.Free;
   end;
+end;
+
+// an argument's type, in full: literals by their kind, anything else as an expression
+function ArgType(Q: TQuery; const A: TSNode): string;
+begin
+  const K = KindOf(A);
+  const T = Txt(Q.Src, A).Trim.ToLower;
+  if K = 'literalString' then
+    Exit(if T.Length = 3 then '#char' else 'string');
+  if K = 'literalNumber' then
+    Exit(if not T.StartsWith('$') and ((T.IndexOf('.') >= 0) or (T.IndexOf('e') >= 0)) then 'double' else 'integer');
+  if (T = 'nil') or (K = 'kNil') then
+    Exit('#nil');
+  if (T = 'true') or (T = 'false') then
+    Exit('boolean');
+  Result := Full(Resolve(TypeOfExpr(Q.Src, A, Q.Cls, Q.FileIdx, Q.Locals)));
+  if (Result = '') and ((K = 'identifier') or (K = 'exprDot')) then
+  begin
+    var Ty: string;                   // ntFinally, TSyntaxNodeType.ntFinally
+    if Enums.TryGetValue(BaseKey(T), Ty) then
+      Result := Ty;
+  end;
+end;
+
+// what at the cursor tells overloads apart: the name in a heading or a declaration (that
+// overload's parameters), or in a call, x.M(a, b) or M(a, b) (its arguments); `x.M;` has none
+function CallSel(Q: TQuery): TSel;
+begin
+  Result := NoSel;
+  const C = Q.Chain.Count;
+  for var I := C - 2 downto C - 3 do
+    if (I >= 0) and (KindOf(Q.Chain[I]) = 'declProc') then
+    begin
+      Result.Exact := True;
+      Result.Key := SigKey(SigOf(Q.Src, Q.Chain[I]));
+      Exit;
+    end;
+  var Callee := Q.N;
+  var I := C - 2;
+  if Q.IsMember then
+  begin
+    Callee := Q.Up;
+    Dec(I);
+  end;
+  if I < 0 then
+    Exit;
+  const P = Q.Chain[I];
+  const First = ts_node_child(P, 0);
+  if (KindOf(P) = 'exprCall') and (ts_node_start_byte(First) = ts_node_start_byte(Callee)) and
+     (ts_node_end_byte(First) = ts_node_end_byte(Callee)) then
+  begin
+    Result.N := 0;
+    const A = FirstOf(P, 'exprArgs');
+    if not IsNull(A) then
+      for var X in Kids(A) do
+        if (KindOf(X) <> ',') and (KindOf(X) <> 'comment') then
+        begin
+          Inc(Result.N);
+          Result.Tys := Result.Tys + [ArgType(Q, X)];
+        end;
+  end
+  else if KindOf(P) <> 'exprUnary' then
+    Result.N := 0                     // `x.M;`, `if M then`: called with none
+  else if not Txt(Q.Src, P).TrimLeft.StartsWith('@') then
+    Result.N := 0;                    // `not M`; `@M` is the method itself, any of them
 end;
 
 // x.M: on an interface, its implementing methods; on a class, the method and its overrides. And
@@ -1661,10 +2100,11 @@ begin
       var Info: TTypeInfo;
       if (TyKey = '') or not Types.TryGetValue(TyKey, Info) then
         Exit;
+      const Sel = CallSel(Q);
       if not Info.IsIntf then
-        Exit( ClassImplementations(TyKey, Q.Name) );
+        Exit( ClassImplementations(TyKey, Q.Name, Sel) );
       const Wild: TList<string> = if (Q.Cls <> '') and Types.ContainsKey(Q.Cls) then Types[Q.Cls].TParams else nil;
-      Result := InterfaceImplementations(TyKey, Q.Name, Recv, Wild);
+      Result := InterfaceImplementations(TyKey, Q.Name, Recv, Wild, Sel);
     finally
       Q.Free;
     end;
@@ -1924,6 +2364,7 @@ initialization
   Types := TObjectDictionary<string, TTypeInfo>.Create([doOwnsValues]);
   Impls := TDictionary<string, TPlace>.Create;
   Funcs := TDictionary<string, string>.Create;
+  Enums := TDictionary<string, string>.Create;
   ImplCache := TObjectDictionary<string, TList<string>>.Create([doOwnsValues]);
   Names := TDictionary<string, TPlace>.Create;
   Aliases := TDictionary<string, string>.Create;
@@ -1942,6 +2383,7 @@ finalization
   Owners.Free;
   Indexed.Free;
   Funcs.Free;
+  Enums.Free;
   Impls.Free;
   Types.Free;
   Globals.Free;
