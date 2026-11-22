@@ -2,9 +2,12 @@ package DelphiPPIDE;
 
 { The rules in the Delphi IDE's editor: see DelphiPP.IDE.pas. Built by build.cmd
   beside it, for the 32-bit IDE (bds.exe in bin) and the 64-bit one (in bin64).
-  Navigation (go to implementation, find references) is DelfNav's, from the submodule
-  ..\DelfNav: this package has it built in, so install this one or DelfNav's DelfNavIDE,
-  not both. }
+  Navigation (go to implementation, find references) is DelfNav's: this package requires
+  DelfNavIDE, which holds DelfNav's units and TreeSitter4D's, so the two install together and
+  each unit is in one package only (the user, 22 Nov, installing both: "Cannot load package
+  'DelfNavIDE.' It contains unit 'TreeSitter.Api', which is also contained in package
+  'DelphiPPIDE'"). build.cmd builds DelfNavIDE from the submodule ..\DelfNav first, into the
+  same folder. }
 
 {$DESCRIPTION 'DelphiPP: the rules in the editor'}
 {$DESIGNONLY}
@@ -13,14 +16,12 @@ package DelphiPPIDE;
 requires
   rtl,
   vcl,
-  designide;
+  designide,
+  DelfNavIDE;
 
 contains
   DelphiPP.IDE in 'DelphiPP.IDE.pas',
   DelphiPP.Marks in 'DelphiPP.Marks.pas',
-  DelfNav.IDE in '..\DelfNav\delphi\ide\DelfNav.IDE.pas',
-  DelfNav.IDE.Hint in '..\DelfNav\delphi\ide\DelfNav.IDE.Hint.pas',
-  DelfNav.Index in '..\DelfNav\delphi\DelfNav.Index.pas',
   DelphiPP.Engine in '..\DelphiPP.Engine.pas',
   DelphiPP.Hover in '..\DelphiPP.Hover.pas',
   DelphiPP.Rules in '..\DelphiPP.Rules.pas',
@@ -32,7 +33,6 @@ contains
   DelphiPP.Rule.AutoProperty in '..\DelphiPP.Rule.AutoProperty.pas',
   DelphiPP.Rule.DoubleQuotes in '..\DelphiPP.Rule.DoubleQuotes.pas',
   DelphiPP.Rule.Footnotes in '..\DelphiPP.Rule.Footnotes.pas',
-  DelphiPP.Rule.Derive in '..\DelphiPP.Rule.Derive.pas',
-  TreeSitter.Api in '..\TreeSitter4D\delphi\TreeSitter.Api.pas';
+  DelphiPP.Rule.Derive in '..\DelphiPP.Rule.Derive.pas';
 
 end.

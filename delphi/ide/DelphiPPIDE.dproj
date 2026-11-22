@@ -72,11 +72,9 @@
         <DCCReference Include="rtl.dcp"/>
         <DCCReference Include="vcl.dcp"/>
         <DCCReference Include="designide.dcp"/>
+        <DCCReference Include="DelfNavIDE.dcp"/>
         <DCCReference Include="DelphiPP.IDE.pas"/>
         <DCCReference Include="DelphiPP.Marks.pas"/>
-        <DCCReference Include="..\DelfNav\delphi\ide\DelfNav.IDE.pas"/>
-        <DCCReference Include="..\DelfNav\delphi\ide\DelfNav.IDE.Hint.pas"/>
-        <DCCReference Include="..\DelfNav\delphi\DelfNav.Index.pas"/>
         <DCCReference Include="..\DelphiPP.Engine.pas"/>
         <DCCReference Include="..\DelphiPP.Hover.pas"/>
         <DCCReference Include="..\DelphiPP.Rules.pas"/>
@@ -89,7 +87,6 @@
         <DCCReference Include="..\DelphiPP.Rule.DoubleQuotes.pas"/>
         <DCCReference Include="..\DelphiPP.Rule.Footnotes.pas"/>
         <DCCReference Include="..\DelphiPP.Rule.Derive.pas"/>
-        <DCCReference Include="..\TreeSitter4D\delphi\TreeSitter.Api.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

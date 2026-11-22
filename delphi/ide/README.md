@@ -48,8 +48,11 @@ IDE's library path, and with no project, the file's repository. It's
 [DelfNav](https://github.com/pmcgee69/DelfNav)'s, from the submodule `..\DelfNav`: its
 `DelfNav.IDE.pas`, with the index `DelfNav.Index.pas` that delphipp's language server uses for Zed
 (there, Go to Implementation, Definition, Declaration, Type Definition and Find All References).
-This package has it built in, so install this one or DelfNav's `DelfNavIDE.bpl`, not both. To try
-it: DelfNav's [`examples/go-to-implementation`](https://github.com/pmcgee69/DelfNav/tree/main/examples/go-to-implementation).
+It's a package of its own, `DelfNavIDE.bpl`, which this one requires: navigation and TreeSitter4D
+are in DelfNavIDE, the rules in DelphiPPIDE, each unit in one package, so the two install together
+(the user, 22 Nov, when both held the same units: *"Cannot load package 'DelfNavIDE.' It contains
+unit 'TreeSitter.Api', which is also contained in package 'DelphiPPIDE'"*). To try it: DelfNav's
+[`examples/go-to-implementation`](https://github.com/pmcgee69/DelfNav/tree/main/examples/go-to-implementation).
 
 The rules run inside the IDE, on the editor's text, each time it changes: the Delphi engine and
 rules (`..\DelphiPP.Engine.pas`, `..\DelphiPP.Rules.pas`), and the same ones the pre-build event
@@ -66,16 +69,23 @@ new one. It builds where `build.cmd` does.
 **Or** from a RAD Studio Command Prompt:
 
 ```
-build.cmd
+build.cmd install
 ```
 
-It builds one for each of Delphi 13's IDEs: `bin\win32\DelphiPPIDE.bpl` for the 32-bit IDE
-(`Studio\37.0\bin\bds.exe`), `bin\win64\DelphiPPIDE.bpl` for the 64-bit one (`bin64\bds.exe`).
+It builds both packages for each of Delphi 13's IDEs: `bin\win32\DelfNavIDE.bpl` and
+`DelphiPPIDE.bpl` for the 32-bit IDE (`Studio\37.0\bin\bds.exe`), `bin\win64\...` for the 64-bit
+one (`bin64\bds.exe`); DelfNavIDE from the submodule `..\DelfNav`, first. With `install` it copies
+them to the IDE's own package folders (`Public\Documents\Embarcadero\Studio\37.0\Bpl`, and its
+`Win64`), which are on the PATH: Windows has to find `DelfNavIDE.bpl` whenever `DelphiPPIDE.bpl`
+loads.
 
 ## Install it
 
-*Component > Install Packages > Add*, and choose the `.bpl` for the IDE you run. It's listed as
-*DelphiPP: the rules in the editor*. Open a `.dpps` file, as `examples\ide\Greet.dpps`.
+*Component > Install Packages > Add*, from the IDE's package folder (`Bpl` for the 32-bit IDE,
+`Bpl\Win64` for the 64-bit one): **`DelfNavIDE.bpl` first**, listed as *DelfNav: go to
+implementation and find references*, then `DelphiPPIDE.bpl`, *DelphiPP: the rules in the editor*.
+DelfNavIDE alone gives navigation without the rules. Open a `.dpps` file, as
+`examples\ide\Greet.dpps`.
 
 To remove it: the same dialog, select it, *Remove*. Close the IDE before building it again with
 `build.cmd`: Windows doesn't let a loaded `.bpl` be replaced. (Building it in the IDE that has it
