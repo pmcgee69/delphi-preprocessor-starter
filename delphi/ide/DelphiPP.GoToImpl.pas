@@ -14,7 +14,7 @@ unit DelphiPP.GoToImpl;
   Find References (delphipp), on the same menu: every use of the name, listed in the
   Messages view, where a double-click opens it.
 
-  The index is the active project's: the .pas files in its folder and below, and
+  The index is the active project's: the .pas and .dpr files in its folder and below, and
   those in each folder of its search path (the active configuration and platform's),
   read in the background when the editor is first clicked in, and again when the
   project or its search path changes. Any file, in any editor: the open file's own

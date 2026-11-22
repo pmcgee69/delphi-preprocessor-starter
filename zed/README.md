@@ -200,8 +200,8 @@ the Python rules in Zed (above). Without either you still get the highlighting.
 ## What it doesn't do
 
 - **No completion or hover help.** Delphi's own compiler isn't behind this. Navigation is: go to
-  definition, implementation and type definition, and find all references, in `.pas` files too,
-  from an index of the workspace's units (`delphi\DelphiPP.Impl.pas`), a sketch rather than the
+  definition, implementation and type definition, and find all references, in `.pas` and `.dpr`
+  files too, from an index of the workspace's units and programs (`delphi\DelphiPP.Impl.pas`), a sketch rather than the
   compiler. The rules' underlines and fixes are for `.dpps` files only.
 - **One file at a time** when compiling, with no `.dproj`. Units it uses must be beside it.
 

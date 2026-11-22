@@ -724,16 +724,20 @@ begin
   const Seen = TDictionary<string, Boolean>.Create;
   try
     ts_parser_set_language(Parser, tree_sitter_delphi13);
+    // the units, then the programs (the user, 22 Nov: "we have to support .dpr"): a program's
+    // own types and routines are found from inside it, and a name a unit also declares stays
+    // the unit's, the first read, since no unit can use a program
     var Files: TArray<string> := nil;
-    for var I := 0 to High(Deep) + Length(Flat) do
-    try
-      if I <= High(Deep) then
-        Files := Files + TDirectory.GetFiles(Deep[I], '*.pas', TSearchOption.soAllDirectories)
-      else
-        Files := Files + TDirectory.GetFiles(Flat[I - Length(Deep)], '*.pas', TSearchOption.soTopDirectoryOnly);
-    except
-      // a folder we can't read, or one that isn't there: the others
-    end;
+    for var Mask in ['*.pas', '*.dpr'] do
+      for var I := 0 to High(Deep) + Length(Flat) do
+      try
+        if I <= High(Deep) then
+          Files := Files + TDirectory.GetFiles(Deep[I], Mask, TSearchOption.soAllDirectories)
+        else
+          Files := Files + TDirectory.GetFiles(Flat[I - Length(Deep)], Mask, TSearchOption.soTopDirectoryOnly);
+      except
+        // a folder we can't read, or one that isn't there: the others
+      end;
     for var F in Files do
     begin
       if Stopping or (Paths.Count >= 20000) then

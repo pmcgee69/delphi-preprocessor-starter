@@ -24,7 +24,7 @@ Open `GoToImpl.dpr` here. In `Shapes.pas`, at the end:
 `FService.DoSomething`, `FKids.DoSomething` (an `IChild` inherits it) and
 `CreateMyObject.DoSomething`. On `IMyInterface` itself: its 10 uses, both units.
 
-The index is the active project's: the `.pas` files in its folder and below, and in each folder of
+The index is the active project's: the `.pas` and `.dpr` files in its folder and below, and in each folder of
 its search path. It's read in the background when you first click in an editor, and again when
 the project or its search path changes. For something bigger: Spring4D's
 `Tests\Spring.Tests.Delphi12.dproj` puts all of `Source` on its search path; there,
