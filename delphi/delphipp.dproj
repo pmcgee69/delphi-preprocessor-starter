@@ -40,7 +40,7 @@
     <PropertyGroup Condition="'$(Base)'!=''">
         <SanitizedProjectName>delphipp</SanitizedProjectName>
         <DCC_Namespace>System;$(DCC_Namespace)</DCC_Namespace>
-        <DCC_UnitSearchPath>TreeSitter4D\delphi;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>TreeSitter4D\delphi;DelfNav\delphi;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
     </PropertyGroup>
     <!-- Zed's language server may be running delphipp.exe, which Windows won't let the linker
          overwrite, but will let us rename, as build.cmd does: the old one runs on till Zed

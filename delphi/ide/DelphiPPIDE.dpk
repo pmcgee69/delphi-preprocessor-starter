@@ -1,7 +1,10 @@
 package DelphiPPIDE;
 
 { The rules in the Delphi IDE's editor: see DelphiPP.IDE.pas. Built by build.cmd
-  beside it, for the 32-bit IDE (bds.exe in bin) and the 64-bit one (in bin64). }
+  beside it, for the 32-bit IDE (bds.exe in bin) and the 64-bit one (in bin64).
+  Navigation (go to implementation, find references) is DelfNav's, from the submodule
+  ..\DelfNav: this package has it built in, so install this one or DelfNav's DelfNavIDE,
+  not both. }
 
 {$DESCRIPTION 'DelphiPP: the rules in the editor'}
 {$DESIGNONLY}
@@ -15,8 +18,9 @@ requires
 contains
   DelphiPP.IDE in 'DelphiPP.IDE.pas',
   DelphiPP.Marks in 'DelphiPP.Marks.pas',
-  DelphiPP.GoToImpl in 'DelphiPP.GoToImpl.pas',
-  DelphiPP.Impl in '..\DelphiPP.Impl.pas',
+  DelfNav.IDE in '..\DelfNav\delphi\ide\DelfNav.IDE.pas',
+  DelfNav.IDE.Hint in '..\DelfNav\delphi\ide\DelfNav.IDE.Hint.pas',
+  DelfNav.Index in '..\DelfNav\delphi\DelfNav.Index.pas',
   DelphiPP.Engine in '..\DelphiPP.Engine.pas',
   DelphiPP.Hover in '..\DelphiPP.Hover.pas',
   DelphiPP.Rules in '..\DelphiPP.Rules.pas',

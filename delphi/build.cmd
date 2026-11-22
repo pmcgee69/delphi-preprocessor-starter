@@ -11,6 +11,11 @@ if not exist TreeSitter4D\delphi\TreeSitter.Api.pas (
   echo TreeSitter4D isn't here yet: run get-treesitter4d.cmd first
   exit /b 1
 )
+rem navigation is DelfNav's, a submodule (git clone --recurse-submodules, or this once)
+if not exist DelfNav\delphi\DelfNav.Index.pas (
+  echo DelfNav isn't here yet: run "git submodule update --init" in the repository
+  exit /b 1
+)
 set DCC=dcc64
 set OUT=bin
 set TEST=
@@ -26,10 +31,11 @@ rem Zed's language server may be running delphipp.exe, which Windows won't let d
 rem but will let us rename: the old one runs on till Zed restarts it, and is deleted next time
 del /q %OUT%\delphipp.old-*.exe 2>nul
 if exist %OUT%\delphipp.exe move /y %OUT%\delphipp.exe %OUT%\delphipp.old-%RANDOM%.exe >nul
-for %%p in (delphipp RunTests NavSweep) do (
-  %DCC% -Q -B -E%OUT% -NU%OUT%\dcu "-NSSystem;Winapi" -UTreeSitter4D\delphi %%p.dpr || exit /b 1
+for %%p in (delphipp RunTests) do (
+  %DCC% -Q -B -E%OUT% -NU%OUT%\dcu "-NSSystem;Winapi" "-UTreeSitter4D\delphi;DelfNav\delphi" %%p.dpr || exit /b 1
 )
 rem the old one now, unless it is still running
 del /q %OUT%\delphipp.old-*.exe 2>nul
-echo built: %OUT%\delphipp.exe, %OUT%\RunTests.exe, %OUT%\NavSweep.exe
+echo built: %OUT%\delphipp.exe, %OUT%\RunTests.exe
+rem NavSweep, the index's corpus check, is DelfNav's: DelfNav\delphi\build.cmd
 if defined TEST %OUT%\RunTests.exe

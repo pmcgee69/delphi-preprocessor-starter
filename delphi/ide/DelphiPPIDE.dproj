@@ -74,8 +74,9 @@
         <DCCReference Include="designide.dcp"/>
         <DCCReference Include="DelphiPP.IDE.pas"/>
         <DCCReference Include="DelphiPP.Marks.pas"/>
-        <DCCReference Include="DelphiPP.GoToImpl.pas"/>
-        <DCCReference Include="..\DelphiPP.Impl.pas"/>
+        <DCCReference Include="..\DelfNav\delphi\ide\DelfNav.IDE.pas"/>
+        <DCCReference Include="..\DelfNav\delphi\ide\DelfNav.IDE.Hint.pas"/>
+        <DCCReference Include="..\DelfNav\delphi\DelfNav.Index.pas"/>
         <DCCReference Include="..\DelphiPP.Engine.pas"/>
         <DCCReference Include="..\DelphiPP.Hover.pas"/>
         <DCCReference Include="..\DelphiPP.Rules.pas"/>

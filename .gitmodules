@@ -1,0 +1,3 @@
+[submodule "delphi/DelfNav"]
+	path = delphi/DelfNav
+	url = https://github.com/pmcgee69/DelfNav.git

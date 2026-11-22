@@ -7,8 +7,9 @@ unit DelphiPP.Lsp;
   text in the message, and a code action applies a rule's rewrites to the file. Nothing is
   changed until you ask. JSON-RPC over stdin and stdout.
 
-  Go to implementation (textDocument/implementation): on a call on an interface, x.DoSomething,
-  every class's method that implements it, across the workspace's units (DelphiPP.Impl).
+  Navigation (implementation, definition, type definition, references) is DelfNav's: this
+  server is DelfNav.Lsp's TNavServer with the rules added, DelfNav from the submodule
+  ..\DelfNav (the user, 22 Nov: delphipp uses DelfNav).
 
   Two threads, as in Python: this one reads the editor's messages; a worker runs the rules on a
   file once its edits have paused, newest text only. Positions are LSP's: lines, and columns in
@@ -24,7 +25,7 @@ implementation
 uses
   Winapi.Windows, System.SysUtils, System.Classes, System.Math, System.Character, System.IOUtils,
   System.JSON, System.SyncObjs, System.Generics.Collections, System.Generics.Defaults,
-  DelphiPP.Engine, DelphiPP.Rules, DelphiPP.Hover, DelphiPP.Impl;
+  DelphiPP.Engine, DelphiPP.Rules, DelphiPP.Hover, DelfNav.Index, DelfNav.Lsp;
 
 const
   Pause = 200;    // milliseconds after the last edit before running the rules
@@ -35,11 +36,6 @@ begin
   if Level = 'warning' then Exit( 2 );
   if Level = 'hint' then Exit( 4 );
   Exit( 3 );
-end;
-
-function Num(N: Integer): TJSONNumber;
-begin
-  Exit( TJSONNumber.Create(N) );
 end;
 
 { Positions: LSP's lines and UTF-16 columns, from byte offsets }
@@ -107,56 +103,6 @@ begin
   Result := TJSONObject.Create;
   Result.AddPair('start', OfByte(StartByte));
   Result.AddPair('end', OfByte(EndByte));
-end;
-
-// file:///D:/a%20b/X.dpr -> D:\a b\X.dpr; file://server/share/X.dpr -> \\server\share\X.dpr
-function PathOf(const Uri: string): string;
-begin
-  var S := Uri;
-  if S.StartsWith('file:', True) then
-    S := S.Substring(5);
-  var Host := '';
-  if S.StartsWith('//') then
-  begin
-    S := S.Substring(2);
-    const Slash = S.IndexOf('/');
-    if Slash < 0 then
-    begin
-      Host := S;
-      S := '';
-    end
-    else
-    begin
-      Host := S.Substring(0, Slash);
-      S := S.Substring(Slash);
-    end;
-  end;
-  // percent escapes are UTF-8 bytes
-  var Bytes: TBytes;
-  var I := 0;
-  while I < S.Length do
-  begin
-    const C = S.Chars[I];
-    var Code: Integer;
-    if (C = '%') and (I + 2 < S.Length) and TryStrToInt('$' + S.Substring(I + 1, 2), Code) then
-    begin
-      Bytes := Bytes + [Byte(Code)];
-      Inc(I, 3);
-    end
-    else
-    begin
-      Bytes := Bytes + TEncoding.UTF8.GetBytes(string(C));
-      Inc(I);
-    end;
-  end;
-  var Path := TEncoding.UTF8.GetString(Bytes);
-  // /D:/x or /D|/x is a drive's
-  if (Path.Length >= 3) and (Path.Chars[0] = '/') and Path.Chars[1].IsLetter and
-     ((Path.Chars[2] = ':') or (Path.Chars[2] = '|')) then
-    Path := Path.Chars[1] + ':' + Path.Substring(3);
-  if (Host <> '') and not SameText(Host, 'localhost') then
-    Path := '//' + Host + Path;
-  Exit( Path.Replace('/', PathDelim) );
 end;
 
 function WouldWrite(const Rule, NewText: string): string;
@@ -312,24 +258,7 @@ begin
   end;
 end;
 
-// D:\a b\X.pas -> file:///D:/a%20b/X.pas; \\server\share\X.pas -> file://server/share/X.pas
-function UriOf(const Path: string): string;
-begin
-  var S := Path.Replace('\', '/');
-  var Prefix := 'file:///';
-  if S.StartsWith('//') then
-  begin
-    Prefix := 'file:';
-  end;
-  Result := Prefix;
-  for var B in TEncoding.UTF8.GetBytes(S) do
-    if CharInSet(Char(B), ['A'..'Z', 'a'..'z', '0'..'9', '-', '.', '_', '~', '/', ':']) then
-      Result := Result + Char(B)
-    else
-      Result := Result + '%' + IntToHex(B, 2);
-end;
-
-{ The protocol: Content-Length framed JSON on the standard handles }
+{ The server: DelfNav's navigation server (TNavServer), and the rules beside it }
 
 type
   TPending = record
@@ -337,178 +266,103 @@ type
     When: UInt64;
   end;
 
-  // DelphiPP.Impl's queries: Implementations, Definitions, TypeDefinitions
-  TFinder = function(const Path, Text: string; Line, Character: Integer;
-    WaitMs: Cardinal): TArray<TImplTarget>;
-
-  TServer = class
+  TServer = class(TNavServer)
   private
-    FIn, FOut : THandle;
-    FBuffer   : array[0..65535] of Byte;
-    FHave, FAt: Integer;
-    FWriteLock: TCriticalSection;
-    FLock     : TCriticalSection;     // FPending, FActions, FExiting
-    FWake     : TEvent;
-    FPending  : TDictionary<string, TPending>;
-    FActions  : TObjectDictionary<string, TJSONObject>;
-    FTexts    : TDictionary<string, string>;   // each open file's newest text, for queries
-    FExiting  : Boolean;
-    // the last find references, when it stopped on its budget: asked again at the same place,
-    // it goes on from there and answers all found so far (requests come one at a time)
-    FRefsKey  : string;
-    FRefsSoFar: TArray<TImplTarget>;
-    FRefsNext : Integer;
-    function NextByte(out B: Byte): Boolean;
-    function ReadLine(out Line: string): Boolean;
-    function ReadMessage: TJSONObject;
-    procedure Send(Msg: TJSONObject);
-    procedure Reply(Id: TJSONValue; Value: TJSONValue);
-    procedure Notify(const Method: string; Params: TJSONObject);
-    procedure Want(const Uri, Text: string);
+    FWake   : TEvent;
+    FPending: TDictionary<string, TPending>;           // FLock, as FActions and FExiting
+    FActions: TObjectDictionary<string, TJSONObject>;
+    FExiting: Boolean;
     procedure Work;
     function CodeActions(const Uri: string): TJSONArray;
-    function LocationsAt(Params: TJSONObject; Find: TFinder): TJSONArray;
-    procedure Handle(Msg: TJSONObject);
+  protected
+    function Name: string; override;
+    procedure Capabilities(Caps: TJSONObject); override;
+    procedure Opened(const Uri, Text: string); override;
+    procedure Closed(const Uri: string); override;
+    function HandleOther(const Method: string; Id: TJSONValue; Params: TJSONObject): Boolean; override;
+    procedure Starting; override;
+    procedure Stopping; override;
   public
     constructor Create;
-    procedure Run;
   end;
 
 constructor TServer.Create;
 begin
-  FIn  := GetStdHandle(STD_INPUT_HANDLE);
-  FOut := GetStdHandle(STD_OUTPUT_HANDLE);
-  FWriteLock := TCriticalSection.Create;
-  FLock      := TCriticalSection.Create;
-  FWake      := TEvent.Create(nil, False, False, '');    // auto-reset: a wake is never lost
-  FPending   := TDictionary<string, TPending>.Create;
-  FActions   := TObjectDictionary<string, TJSONObject>.Create([doOwnsValues]);
-  FTexts     := TDictionary<string, string>.Create;
+  inherited Create;
+  FWake    := TEvent.Create(nil, False, False, '');    // auto-reset: a wake is never lost
+  FPending := TDictionary<string, TPending>.Create;
+  FActions := TObjectDictionary<string, TJSONObject>.Create([doOwnsValues]);
 end;
 
-function TServer.NextByte(out B: Byte): Boolean;
+function TServer.Name: string;
 begin
-  if FAt >= FHave then
-  begin
-    var Got: DWORD := 0;
-    // a closed pipe is the end of input, as a read of nothing is
-    if not ReadFile(FIn, FBuffer, SizeOf(FBuffer), Got, nil) or (Got = 0) then
-      Exit( False );
-    FHave := Got;
-    FAt   := 0;
-  end;
-  B := FBuffer[FAt];
-  Inc(FAt);
-  Exit( True );
+  Exit( 'delphipp' );
 end;
 
-// a header line, without its CR LF; False at the end of input
-function TServer.ReadLine(out Line: string): Boolean;
+procedure TServer.Capabilities(Caps: TJSONObject);
 begin
-  var Bytes: TBytes;
-  var B: Byte;
-  var Any := False;
-  while NextByte(B) do
-  begin
-    Any := True;
-    if B = 10 then
-      Break;
-    Bytes := Bytes + [B];
-  end;
-  Line := TEncoding.ASCII.GetString(Bytes).Trim;
-  Exit( Any );
+  inherited;     // navigation's: implementation, definition, declaration, type definition, references
+  Caps.AddPair('codeActionProvider', TJSONBool.Create(True));
 end;
 
-// the next message, or nil at the end of input
-function TServer.ReadMessage: TJSONObject;
+procedure TServer.Opened(const Uri, Text: string);
 begin
-  var Size := -1;
-  var Line: string;
-  repeat
-    if not ReadLine(Line) then
-      Exit( nil );
-    const Colon = Line.IndexOf(':');
-    if (Colon > 0) and SameText(Line.Substring(0, Colon).Trim, 'Content-Length') then
-      Size := StrToIntDef(Line.Substring(Colon + 1).Trim, -1);
-  until Line = '';
-  if Size < 0 then
-    Exit( TJSONObject.Create );     // no body: nothing to do, read on
-  var Body: TBytes;
-  SetLength(Body, Size);
-  for var I := 0 to Size - 1 do
-    if not NextByte(Body[I]) then
-      Exit( nil );
-  const Value = TJSONObject.ParseJSONValue(Body, 0, True);
-  if Value is TJSONObject then
-    Exit( TJSONObject(Value) );
-  Value.Free;
-  Exit( TJSONObject.Create );
-end;
-
-// takes Msg and frees it
-procedure TServer.Send(Msg: TJSONObject);
-begin
-  try
-    const Body = TEncoding.UTF8.GetBytes(Msg.ToJSON);
-    const Head = TEncoding.ASCII.GetBytes(Format('Content-Length: %d'#13#10#13#10, [Length(Body)]));
-    const All = Head + Body;
-    FWriteLock.Enter;
-    try
-      var Done := 0;
-      while Done < Length(All) do
-      begin
-        var Wrote: DWORD := 0;
-        if not WriteFile(FOut, All[Done], Length(All) - Done, Wrote, nil) then
-          Exit;     // the editor has gone
-        Inc(Done, Wrote);
-      end;
-    finally
-      FWriteLock.Leave;
-    end;
-  finally
-    Msg.Free;
-  end;
-end;
-
-procedure TServer.Reply(Id: TJSONValue; Value: TJSONValue);
-begin
-  if Id = nil then
-  begin
-    Value.Free;     // a notification wants no reply
+  // the rules only on .dpps, the preprocessor's own files; a .pas gets navigation alone
+  // (the user, 21 Nov: "prob just dpps for now")
+  if not SameText(ExtractFileExt(PathOf(Uri)), '.dpps') then
     Exit;
-  end;
-  var Msg := TJSONObject.Create;
-  Msg.AddPair('jsonrpc', '2.0');
-  Msg.AddPair('id', TJSONValue(Id.Clone));
-  Msg.AddPair('result', Value);
-  Send(Msg);
-end;
-
-procedure TServer.Notify(const Method: string; Params: TJSONObject);
-begin
-  var Msg := TJSONObject.Create;
-  Msg.AddPair('jsonrpc', '2.0');
-  Msg.AddPair('method', Method);
-  Msg.AddPair('params', Params);
-  Send(Msg);
-end;
-
-procedure TServer.Want(const Uri, Text: string);
-begin
   var P: TPending;
   P.Text := Text;
   P.When := GetTickCount64;
   FLock.Enter;
   try
-    // the rules only on .dpps, the preprocessor's own files; a .pas gets navigation alone
-    // (the user, 21 Nov: "prob just dpps for now")
-    if SameText(ExtractFileExt(PathOf(Uri)), '.dpps') then
-      FPending.AddOrSetValue(Uri, P);
-    FTexts.AddOrSetValue(Uri, Text);
+    FPending.AddOrSetValue(Uri, P);
   finally
     FLock.Leave;
   end;
   FWake.SetEvent;
+end;
+
+procedure TServer.Closed(const Uri: string);
+begin
+  FLock.Enter;
+  try
+    FPending.Remove(Uri);
+    FActions.Remove(Uri);
+  finally
+    FLock.Leave;
+  end;
+  var P := TJSONObject.Create;
+  P.AddPair('uri', Uri);
+  P.AddPair('diagnostics', TJSONArray.Create);
+  Notify('textDocument/publishDiagnostics', P);
+end;
+
+function TServer.HandleOther(const Method: string; Id: TJSONValue; Params: TJSONObject): Boolean;
+begin
+  if Method = 'textDocument/codeAction' then
+  begin
+    Reply(Id, CodeActions(Params.GetValue<string>('textDocument.uri')));
+    Exit( True );
+  end;
+  Exit( False );
+end;
+
+procedure TServer.Starting;
+begin
+  TThread.CreateAnonymousThread(procedure begin Work; end).Start;
+end;
+
+procedure TServer.Stopping;
+begin
+  FLock.Enter;
+  try
+    FExiting := True;
+  finally
+    FLock.Leave;
+  end;
+  FWake.SetEvent;
+  // the worker may be in the middle of a file: the process ends with it, as Python's daemon
 end;
 
 // the worker: the file whose edits paused first, its newest text, then the next
@@ -561,14 +415,8 @@ begin
       on E: Exception do
       begin
         const Why = Format('the rules failed on %s: %s: %s', [Uri, E.ClassName, E.Message]);
-        var Shown := TJSONObject.Create;
-        Shown.AddPair('type', Num(1));
-        Shown.AddPair('message', Why);
-        Notify('window/showMessage', Shown);
-        var Logged := TJSONObject.Create;
-        Logged.AddPair('type', Num(1));
-        Logged.AddPair('message', Why);
-        Notify('window/logMessage', Logged);
+        Say(1, Why);
+        Log(1, Why);
         Continue;
       end;
     end;
@@ -642,240 +490,6 @@ begin
   finally
     FLock.Leave;
   end;
-end;
-
-// textDocument/implementation: a Location for each implementing method, none when the name
-// under the cursor isn't a call on an interface; textDocument/definition (and declaration):
-// where the name is declared; textDocument/typeDefinition: where its type is
-function TServer.LocationsAt(Params: TJSONObject; Find: TFinder): TJSONArray;
-begin
-  Result := TJSONArray.Create;
-  const Uri = Params.GetValue<string>('textDocument.uri');
-  var Text: string;
-  FLock.Enter;
-  try
-    if not FTexts.TryGetValue(Uri, Text) then
-      Text := '';
-  finally
-    FLock.Leave;
-  end;
-  const Path = PathOf(Uri);
-  if (Text = '') and FileExists(Path) then
-    Text := TFile.ReadAllText(Path);
-  const Line = Params.GetValue<Integer>('position.line');
-  const Character = Params.GetValue<Integer>('position.character');
-  var Targets: TArray<TImplTarget>;
-  if Assigned(Find) then
-    Targets := Find(Path, Text, Line, Character, 30000)
-  else
-  begin
-    // textDocument/references: the other files open in the editor as it has them
-    var Open := TDictionary<string, string>.Create;
-    FLock.Enter;
-    try
-      for var Pair in FTexts do
-        Open.AddOrSetValue(PathOf(Pair.Key).ToLower, Pair.Value);
-    finally
-      FLock.Leave;
-    end;
-    try
-      var Decl := False;
-      if Params.GetValue('context') is TJSONObject then
-        Params.TryGetValue<Boolean>('context.includeDeclaration', Decl);
-      // half a second at a time (the user, 21 Nov: "a time budget like 0.5sec"); the same
-      // place asked again goes on where it stopped
-      const Key = Format('%s|%d|%d|%s', [Uri, Line, Character, BoolToStr(Decl)]);
-      var First := 0;
-      var SoFar: TArray<TImplTarget> := nil;
-      if (Key = FRefsKey) and (FRefsNext > 0) then
-      begin
-        First := FRefsNext;
-        SoFar := FRefsSoFar;
-      end;
-      var More: TRefsMore;
-      Targets := SoFar + References(Path, Text, Line, Character, Decl,
-        function(P: string): string
-        begin
-          if not Open.TryGetValue(P.ToLower, Result) then
-            Result := '';
-        end, 30000, 500, First, More);
-      FRefsKey   := Key;
-      FRefsSoFar := Targets;
-      FRefsNext  := More.Next;
-      var Say := '';
-      if More.Common then
-        Say := 'delphipp: a name every unit uses (Integer, string, TObject ...): its uses aren''t listed'
-      else if More.Next >= 0 then
-        Say := Format('delphipp: %d found so far, %d of %d units read: Find All References again for more',
-          [Length(Targets), More.Read, More.Total]);
-      if Say <> '' then
-      begin
-        var Shown := TJSONObject.Create;
-        Shown.AddPair('type', Num(3));
-        Shown.AddPair('message', Say);
-        Notify('window/showMessage', Shown);
-      end;
-    finally
-      Open.Free;
-    end;
-  end;
-  for var T in Targets do
-  begin
-    var At := TJSONObject.Create;
-    At.AddPair('line', Num(T.Line - 1));
-    At.AddPair('character', Num(T.Col));
-    var Upto := TJSONObject.Create;
-    Upto.AddPair('line', Num(T.Line - 1));
-    Upto.AddPair('character', Num(T.Col + T.Len));
-    var Range := TJSONObject.Create;
-    Range.AddPair('start', At);
-    Range.AddPair('end', Upto);
-    var L := TJSONObject.Create;
-    L.AddPair('uri', UriOf(T.Path));
-    L.AddPair('range', Range);
-    Result.AddElement(L);
-  end;
-end;
-
-procedure TServer.Handle(Msg: TJSONObject);
-begin
-  const MethodValue = Msg.GetValue('method');
-  if MethodValue = nil then
-    Exit;     // a reply to us: we ask nothing
-  const Method = MethodValue.Value;
-  var Id := Msg.GetValue('id');
-  if Id is TJSONNull then
-    Id := nil;
-  // params may be missing, or null (as a shutdown's often is): either is no params
-  var Params: TJSONObject;
-  if Msg.GetValue('params') is TJSONObject then
-    Params := TJSONObject(Msg.GetValue('params'))
-  else
-  begin
-    Msg.RemovePair('params').Free;
-    Params := TJSONObject.Create;
-    Msg.AddPair('params', Params);
-  end;
-
-  if Method = 'initialize' then
-  begin
-    var Sync := TJSONObject.Create;
-    Sync.AddPair('openClose', TJSONBool.Create(True));
-    Sync.AddPair('change', Num(1));
-    Sync.AddPair('save', TJSONObject.Create);    // didSave: the index reads that file again
-    var Caps := TJSONObject.Create;
-    Caps.AddPair('textDocumentSync', Sync);
-    Caps.AddPair('codeActionProvider', TJSONBool.Create(True));
-    Caps.AddPair('implementationProvider', TJSONBool.Create(True));
-    Caps.AddPair('definitionProvider', TJSONBool.Create(True));
-    Caps.AddPair('declarationProvider', TJSONBool.Create(True));
-    Caps.AddPair('typeDefinitionProvider', TJSONBool.Create(True));
-    Caps.AddPair('referencesProvider', TJSONBool.Create(True));
-    // the workspace's units, indexed in the background for go to implementation
-    var Root := '';
-    if Params.GetValue('rootUri') is TJSONString then
-      Root := PathOf(Params.GetValue<string>('rootUri'))
-    else if (Params.GetValue('workspaceFolders') is TJSONArray) and
-            (TJSONArray(Params.GetValue('workspaceFolders')).Count > 0) then
-      Root := PathOf(TJSONArray(Params.GetValue('workspaceFolders')).Items[0].GetValue<string>('uri'));
-    if (Root <> '') and DirectoryExists(Root) then
-      IndexFolder(Root);
-    var Info := TJSONObject.Create;
-    Info.AddPair('name', 'delphipp');
-    var R := TJSONObject.Create;
-    R.AddPair('capabilities', Caps);
-    R.AddPair('serverInfo', Info);
-    Reply(Id, R);
-  end
-  else if Method = 'shutdown' then
-    Reply(Id, TJSONNull.Create)
-  else if Method = 'textDocument/didOpen' then
-    Want(Params.GetValue<string>('textDocument.uri'), Params.GetValue<string>('textDocument.text'))
-  else if Method = 'textDocument/didChange' then
-  begin
-    const Changes = Params.GetValue('contentChanges') as TJSONArray;
-    Want(Params.GetValue<string>('textDocument.uri'),
-         Changes.Items[Changes.Count - 1].GetValue<string>('text'));
-  end
-  else if Method = 'textDocument/didSave' then
-    Reindex(PathOf(Params.GetValue<string>('textDocument.uri')))
-  else if Method = 'textDocument/didClose' then
-  begin
-    const Uri = Params.GetValue<string>('textDocument.uri');
-    FLock.Enter;
-    try
-      FPending.Remove(Uri);
-      FActions.Remove(Uri);
-      FTexts.Remove(Uri);
-    finally
-      FLock.Leave;
-    end;
-    var P := TJSONObject.Create;
-    P.AddPair('uri', Uri);
-    P.AddPair('diagnostics', TJSONArray.Create);
-    Notify('textDocument/publishDiagnostics', P);
-    // closed unsaved, its edits may be in the index: as saved again
-    Reindex(PathOf(Uri));
-  end
-  else if Method = 'textDocument/codeAction' then
-    Reply(Id, CodeActions(Params.GetValue<string>('textDocument.uri')))
-  else if Method = 'textDocument/implementation' then
-    Reply(Id, LocationsAt(Params, Implementations))
-  else if (Method = 'textDocument/definition') or (Method = 'textDocument/declaration') then
-    Reply(Id, LocationsAt(Params, Definitions))
-  else if Method = 'textDocument/typeDefinition' then
-    Reply(Id, LocationsAt(Params, TypeDefinitions))
-  else if Method = 'textDocument/references' then
-    Reply(Id, LocationsAt(Params, nil))
-  else if Id <> nil then
-  begin
-    var Err := TJSONObject.Create;
-    Err.AddPair('code', Num(-32601));
-    Err.AddPair('message', 'no ' + Method);
-    var Msg2 := TJSONObject.Create;
-    Msg2.AddPair('jsonrpc', '2.0');
-    Msg2.AddPair('id', TJSONValue(Id.Clone));
-    Msg2.AddPair('error', Err);
-    Send(Msg2);
-  end;
-end;
-
-procedure TServer.Run;
-begin
-  TThread.CreateAnonymousThread(procedure begin Work; end).Start;
-  while True do
-  begin
-    const Msg = ReadMessage;
-    if Msg = nil then
-      Break;
-    try
-      const Method = Msg.GetValue('method');
-      if (Method <> nil) and (Method.Value = 'exit') then
-        Break;
-      try
-        Handle(Msg);
-      except
-        // a message we can't read is logged and skipped, not the end of the server
-        on E: Exception do
-        begin
-          var P := TJSONObject.Create;
-          P.AddPair('type', Num(1));
-          P.AddPair('message', Format('delphipp: %s: %s', [E.ClassName, E.Message]));
-          Notify('window/logMessage', P);
-        end;
-      end;
-    finally
-      Msg.Free;
-    end;
-  end;
-  FLock.Enter;
-  try
-    FExiting := True;
-  finally
-    FLock.Leave;
-  end;
-  FWake.SetEvent;
-  // the worker may be in the middle of a file: the process ends with it, as Python's daemon
 end;
 
 procedure Serve;

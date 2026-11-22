@@ -44,10 +44,12 @@ forward arrows return to where you were. Resting the mouse on a name shows its d
 and where it is (not in a `.dpps` file, which has the rules' hovers).
 
 It reads the active project's units in the background: its folder and below, its search path, the
-IDE's library path, and with no project, the file's repository. `DelphiPP.GoToImpl.pas`, with the
-index `..\DelphiPP.Impl.pas` that delphipp's language server uses for Zed (there, Go to
-Implementation, Definition, Declaration, Type Definition and Find All References). To try it:
-[`examples\go-to-implementation`](../../examples/go-to-implementation/).
+IDE's library path, and with no project, the file's repository. It's
+[DelfNav](https://github.com/pmcgee69/DelfNav)'s, from the submodule `..\DelfNav`: its
+`DelfNav.IDE.pas`, with the index `DelfNav.Index.pas` that delphipp's language server uses for Zed
+(there, Go to Implementation, Definition, Declaration, Type Definition and Find All References).
+This package has it built in, so install this one or DelfNav's `DelfNavIDE.bpl`, not both. To try
+it: DelfNav's [`examples/go-to-implementation`](https://github.com/pmcgee69/DelfNav/tree/main/examples/go-to-implementation).
 
 The rules run inside the IDE, on the editor's text, each time it changes: the Delphi engine and
 rules (`..\DelphiPP.Engine.pas`, `..\DelphiPP.Rules.pas`), and the same ones the pre-build event

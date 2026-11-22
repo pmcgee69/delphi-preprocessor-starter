@@ -67,6 +67,7 @@ folder.
 **With Delphi alone** (Delphi 13; Win64 or Win32):
 
 ```
+git submodule update --init          rem once, unless cloned --recurse-submodules: DelfNav
 cd delphi
 get-treesitter4d.cmd                 rem once: TreeSitter4D's units and its compiled C
 build.cmd                            rem bin\delphipp.exe and bin\RunTests.exe
@@ -77,6 +78,11 @@ bin\delphipp.exe ..\tests\cases\with rem run them over a file or folder
 
 Or build `delphipp.exe` in the IDE: after `get-treesitter4d.cmd`, open `delphi\delphipp.dproj`
 and build it. It writes to the same `bin\` as `build.cmd`. More in [`delphi\README.md`](delphi/README.md).
+
+Navigation (go to implementation, definition, type definition, find references) is
+[DelfNav](https://github.com/pmcgee69/DelfNav)'s, a submodule in `delphi\DelfNav`: delphipp's
+language server and IDE package have it built in. DelfNav is also its own server and package, for
+navigation without the rules.
 
 **With Python** 3.10 or later (64-bit or 32-bit), on Windows:
 

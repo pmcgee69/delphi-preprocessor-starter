@@ -49,7 +49,10 @@ Unzip it somewhere with a short path, such as `C:\delphipp`, so that the folder 
 
 **Or with git:** 
 
-`git clone https://github.com/pmcgee69/delphi-preprocessor-starter C:\delphipp`
+`git clone --recurse-submodules https://github.com/pmcgee69/delphi-preprocessor-starter C:\delphipp`
+
+(`--recurse-submodules` brings [DelfNav](https://github.com/pmcgee69/DelfNav), the navigation,
+into `delphi\DelfNav`. Cloned without it: `git submodule update --init` in `C:\delphipp`.)
 
 Then, in your Command Prompt, build the language server, `delphi\bin\delphipp.exe`:
 
@@ -201,7 +204,7 @@ the Python rules in Zed (above). Without either you still get the highlighting.
 
 - **No completion or hover help.** Delphi's own compiler isn't behind this. Navigation is: go to
   definition, implementation and type definition, and find all references, in `.pas` and `.dpr`
-  files too, from an index of the workspace's units and programs (`delphi\DelphiPP.Impl.pas`), a sketch rather than the
+  files too, from an index of the workspace's units and programs ([DelfNav](https://github.com/pmcgee69/DelfNav)'s, in `delphi\DelfNav`), a sketch rather than the
   compiler. The rules' underlines and fixes are for `.dpps` files only.
 - **One file at a time** when compiling, with no `.dproj`. Units it uses must be beside it.
 

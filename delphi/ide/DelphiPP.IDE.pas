@@ -18,27 +18,16 @@ unit DelphiPP.IDE;
 
 interface
 
-uses
-  System.Types, System.Classes, Vcl.Controls;
-
-type
-  // a hint in a fixed-width font, as it shows code: THintWindow.CalcHintRect sets the
-  // hint font back each time (user, 7 Nov, the first hover: proportional, ragged indents).
-  // The rules' hovers, and go to implementation's (DelphiPP.GoToImpl)
-  TCodeHint = class(THintWindow)
-  public
-    function CalcHintRect(MaxWidth: Integer; const AHint: string; AData: TCustomData): TRect; override;
-  end;
-
 procedure Register;
 
 implementation
 
 uses
-  Winapi.Windows, System.SysUtils, System.Math, System.Generics.Collections,
-  Vcl.Graphics, Vcl.Forms, Vcl.ExtCtrls,
+  Winapi.Windows, System.Types, System.Classes, System.SysUtils, System.Math,
+  System.Generics.Collections, Vcl.Controls, Vcl.Graphics, Vcl.Forms, Vcl.ExtCtrls,
   ToolsAPI, ToolsAPI.Editor,
-  DelphiPP.Marks;
+  DelphiPP.Marks,
+  DelfNav.IDE.Hint;     // TCodeHint, the fixed-width hint: DelfNav's, shared with go to implementation
 
 const
   EditColor    = TColor($C0A000);   // teal: a rule changes this
@@ -113,31 +102,6 @@ begin
     if Got < Chunk then
       Break;
   until False;
-end;
-
-{ TCodeHint }
-
-function TCodeHint.CalcHintRect(MaxWidth: Integer; const AHint: string; AData: TCustomData): TRect;
-begin
-  inherited;                                        // the hint font, at the screen's scale
-  // the editor's own font and size (user, 7 Nov, the hint's size: "text is kinda small")
-  Canvas.Font.Name := 'Consolas';
-  try
-    const Options = (BorlandIDEServices as IOTAEditorServices).GetEditOptions('Borland.EditOptions.Pascal');
-    if Options <> nil then
-    begin
-      if Options.FontName <> '' then
-        Canvas.Font.Name := Options.FontName;
-      if Options.FontSize > 0 then
-        Canvas.Font.Size := Options.FontSize;
-    end;
-  except
-    // the hint font's size, in Consolas
-  end;
-  Result := Rect(0, 0, MaxWidth, 0);
-  DrawText(Canvas.Handle, AHint, -1, Result, DT_CALCRECT or DT_LEFT or DT_NOPREFIX);
-  Inc(Result.Right, 6);
-  Inc(Result.Bottom, 2);
 end;
 
 { TRulesNotifier }
