@@ -36,3 +36,21 @@ that fits), no `as` or `with`, generic constraints unchecked.
 The unit you ask from is read again whenever it has changed, saved or not, and Find References
 reads every unit open in the editor as it is; another unit saved meanwhile is read again when
 you next ask from it (in Zed, as soon as it's saved).
+
+## Beside DelphiLSP
+
+Delphi 13's own language server, `DelphiLSP.exe`, says it provides implementation
+(`implementationProvider: true`), but asked directly (22 Nov 2026, with
+[`tools/delphilsp-probe`](../../tools/delphilsp-probe/README.md)) it's the old Ctrl+Shift+Up/Down:
+
+| Asked at | DelphiLSP: definition | DelphiLSP: implementation | delphipp: implementation |
+|---|---|---|---|
+| `S.Area`, `S` an interface | the interface's `Area` | **nothing** | each class's `Area` |
+| `A.Speak`, `Speak` virtual, abstract | `TAnimal.Speak` | **nothing** | each override |
+| an interface's or abstract method's declaration | nothing | **nothing** | its implementations |
+| a class method's declaration | its body | its body's first statement | |
+| a method's body heading | its declaration | its declaration | |
+
+It has no references at all (`textDocument/references`: *Method not found*), and no type
+definition. The IDE talks to one DelphiLSP (with two agents it starts, `-Name Agent0` and
+`Agent1`), with no setting for another server; delphipp's package works beside it.
